@@ -1298,12 +1298,12 @@ function saveAsistAct(evento, fecha, data) {
 
 // ── TU CONFIGURACIÓN FIREBASE (pegar aquí) ──
 var FIREBASE_CONFIG = {
-  apiKey:            "TU_API_KEY",
-  authDomain:        "TU_PROYECTO.firebaseapp.com",
-  projectId:         "TU_PROYECTO",
-  storageBucket:     "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId:             "TU_APP_ID"
+  apiKey:            "AIzaSyBDtCNgtVZRZr4RCEwQ0Ow6qOPqbI_YFz8",
+  authDomain:        "promocion-salud-ph.firebaseapp.com",
+  projectId:         "promocion-salud-ph",
+  storageBucket:     "promocion-salud-ph.firebasestorage.app",
+  messagingSenderId: "554580004431",
+  appId:             "1:554580004431:web:1903728db9a237934e243a"
 };
 
 // ── Estado de Firebase ──
@@ -1314,46 +1314,102 @@ var _fbPendingQ = [];
 
 // ── Cargar Firebase SDK dinámicamente ──
 function initFirebase() {
-  if (FIREBASE_CONFIG.apiKey === "TU_API_KEY") {
-    console.warn("[Firebase] No configurado. Usando localStorage como respaldo.");
+  if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === 'TU_API_KEY') {
+    console.warn('[Firebase] No configurado.');
     return;
   }
-
-  // Cargar Firebase App
-  var script1 = document.createElement('script');
-  script1.src = 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js';
-  script1.onload = function() {
-    var script2 = document.createElement('script');
-    script2.src = 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js';
-    script2.onload = function() {
-      var script3 = document.createElement('script');
-      script3.src = 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js';
-      script3.onload = function() {
-        try {
-          firebase.initializeApp(FIREBASE_CONFIG);
-          _fbDb   = firebase.firestore();
-          _fbAuth = firebase.auth();
-          _fbReady = true;
-          console.log("[Firebase] Conectado correctamente ✅");
-          // Procesar cola de operaciones pendientes
-          _fbPendingQ.forEach(function(fn){ fn(); });
-          _fbPendingQ = [];
-          // Iniciar sincronización en tiempo real
-          fbSyncRealtimeListeners();
-          fbShowStatus('conectado');
-        } catch(e) {
-          console.error("[Firebase] Error al inicializar:", e);
-          fbShowStatus('error');
-        }
-      };
-      document.head.appendChild(script3);
-    };
-    document.head.appendChild(script2);
-  };
-  document.head.appendChild(script1);
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    window._db = firebase.firestore();
+    window._firebaseReady = true;
+    console.log('[Firebase] ✅ Conectado a Firestore:', FIREBASE_CONFIG.projectId);
+    showToast('🔥 Firebase conectado correctamente', 'verde');
+  } catch(e) {
+    console.error('[Firebase] Error:', e.message);
+    showToast('⚠️ Error conectando Firebase: ' + e.message);
+  }
 }
 
-// ── Indicador de estado en panel admin ──
+function migrarAFirebase() {
+  if (!window._db) {
+    // Try to init first
+    initFirebase();
+    if (!window._db) {
+      showToast('⚠️ Firebase no está conectado. Verifica la configuración.');
+      return;
+    }
+  }
+  var db    = window._db;
+  var batch = db.batch();
+  var count = 0;
+
+  // Migrate users
+  var users = getUsers();
+  users.forEach(function(u) {
+    var ref = db.collection('usuarios').doc(String(u.id));
+    batch.set(ref, u);
+    count++;
+  });
+
+  // Migrate inscripciones
+  var insc = getInscrip();
+  insc.forEach(function(r, i) {
+    var ref = db.collection('inscripciones').doc(String(r.id || i));
+    batch.set(ref, r);
+    count++;
+  });
+
+  // Migrate talleres_usuario
+  try {
+    var allT = JSON.parse(localStorage.getItem(TALLERES_KEY)||'{}');
+    Object.keys(allT).forEach(function(uid) {
+      var ref = db.collection('talleres_usuario').doc(uid);
+      batch.set(ref, { talleres: allT[uid] });
+      count++;
+    });
+  } catch(e){}
+
+  // Migrate sesiones
+  try {
+    var allSes = JSON.parse(localStorage.getItem(SESIONES_KEY)||'{}');
+    Object.keys(allSes).forEach(function(tid) {
+      var ref = db.collection('sesiones').doc(tid);
+      batch.set(ref, { sesiones: allSes[tid] });
+      count++;
+    });
+  } catch(e){}
+
+  // Migrate asistencias
+  try {
+    var allA = JSON.parse(localStorage.getItem(ASISTENCIAS_KEY)||'{}');
+    Object.keys(allA).forEach(function(tid) {
+      var ref = db.collection('asistencias').doc(tid);
+      batch.set(ref, allA[tid]);
+      count++;
+    });
+  } catch(e){}
+
+  // Migrate config/ajustes
+  try {
+    var aj = JSON.parse(localStorage.getItem(AJUSTES_KEY)||'{}');
+    if (Object.keys(aj).length) {
+      batch.set(db.collection('config').doc('ajustes'), aj);
+      count++;
+    }
+  } catch(e){}
+
+  batch.commit().then(function() {
+    showToast('✅ ' + count + ' registros migrados a Firebase', 'verde');
+    console.log('[Firebase] Migración completa:', count, 'documentos');
+  }).catch(function(err) {
+    showToast('❌ Error en migración: ' + err.message);
+    console.error('[Firebase] Error migración:', err);
+  });
+}
+
+
 function fbShowStatus(estado) {
   var el = document.getElementById('fb-status');
   if (!el) {
@@ -4743,6 +4799,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
 // Apply saved settings on load
 window.addEventListener('load',function(){
+  // Auto-connect Firebase if configured
+  setTimeout(function(){ initFirebase(); }, 500);
   initBannerImages();
   aplicarEliminacionesGuardadas();
   aplicarEliminacionesTalleres();
@@ -4762,6 +4820,36 @@ function cargarDatosPrueba(){
   if (SEED_DISABLED) return;
 }
 
+function apEliminarUsuario(uid, tipo, nombre) {
+  abrirConfirm(
+    '🗑️',
+    '¿Eliminar a ' + nombre + '?',
+    'Se eliminarán todos sus datos: inscripciones, asistencias y talleres asignados. Esta acción no se puede deshacer.',
+    function() {
+      if (tipo === 'plataforma') {
+        var users = getUsers().filter(function(u){ return String(u.id) !== String(uid); });
+        saveUsers(users);
+      } else {
+        var pres = getPresenciales ? getPresenciales().filter(function(u){ return String(u.id) !== String(uid); }) : [];
+        if (typeof savePresenciales === 'function') savePresenciales(pres);
+      }
+      // Remove from talleres
+      var allT = JSON.parse(localStorage.getItem(TALLERES_KEY)||'{}');
+      delete allT[String(uid)];
+      localStorage.setItem(TALLERES_KEY, JSON.stringify(allT));
+      // Remove inscripciones
+      var insc = getInscrip().filter(function(r){ return String(r.userId||r.id) !== String(uid); });
+      saveInscrip(insc);
+      // Remove role
+      var roles = getRoles();
+      delete roles[String(uid)];
+      saveRoles(roles);
+      showToast('✅ ' + nombre.split(' ')[0] + ' eliminado correctamente', 'verde');
+      apRenderUsuarios();
+      apRenderResumen();
+    }
+  );
+}
 
 </script>
 
