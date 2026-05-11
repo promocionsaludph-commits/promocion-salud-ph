@@ -1312,15 +1312,15 @@ function migrarAFirebase() {
 // ════════════════════════════════════════
 //  DATOS CORE
 // ════════════════════════════════════════
-const STORAGE_KEY = 'ph_inscripciones_v1';
-const USERS_KEY   = 'ph_usuarios_v1';
-const SESSION_KEY = 'ph_session_v1';
+var STORAGE_KEY = 'ph_inscripciones_v1';
+var USERS_KEY   = 'ph_usuarios_v1';
+var SESSION_KEY = 'ph_session_v1';
 var TALLERES_KEY  = 'ph_talleres_usuario_v1';
 
 function getInscrip() { try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); }catch(e){return[];} }
 function saveInscrip(arr) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-  fbSaveInscrip(arr);
+  try { fbSaveInscrip(arr); } catch(e){ console.warn('[FB] saveInscrip:', e.message); }
 }
 function getSession()  { try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null'); }catch(e){return null;} }
 function saveSession(u){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
@@ -1493,7 +1493,7 @@ function doRegistro(){
 
   users.push(newUser);
   saveUsers(users);
-  fbGuardarUsuario(newUser); // sync to Firebase immediately
+  try { fbGuardarUsuario(newUser); } catch(e){ console.warn('[FB] doRegistro fbGuardar:', e.message); }
 
   if (presExistente) {
     // Eliminar de presenciales (ahora es usuario de plataforma)
@@ -3371,7 +3371,7 @@ var USERS_PRESENCIALES_KEY='ph_users_presencial_v1';
 function getPresenciales(){try{return JSON.parse(localStorage.getItem(USERS_PRESENCIALES_KEY)||'[]');}catch(e){return[];}}
 function savePresenciales(arr) {
   localStorage.setItem(USERS_PRESENCIALES_KEY, JSON.stringify(arr));
-  fbSavePresenciales(arr);
+  try { fbSavePresenciales(arr); } catch(e){ console.warn('[FB] savePresenciales:', e.message); }
 }
 function getAllActiveUsers(){return getUsers().concat(getPresenciales());}
 
