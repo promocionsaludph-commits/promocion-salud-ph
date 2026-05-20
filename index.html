@@ -512,6 +512,65 @@ select.form-input { cursor: pointer; }
 .cal-dia.excluir { background: var(--rojo-soft); color: var(--rojo); border: 1.5px solid #fca5a5; cursor: pointer; }
 .cal-header { text-align: center; font-size: 0.7rem; font-weight: 700; color: var(--gris-400); padding: 4px 0; }
 
+/* Reporte de asistencias - tabla scrollable con columnas fijas */
+#rep-tabla-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+  border: 1.5px solid var(--gris-200);
+}
+#rep-tabla {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+}
+#rep-tabla th, #rep-tabla td {
+  border-bottom: 1px solid var(--gris-100);
+  white-space: nowrap;
+}
+/* Sticky: Participante */
+#rep-tabla th:nth-child(1), #rep-tabla td:nth-child(1) {
+  position: sticky; left: 0; z-index: 2;
+  background: #fff; border-right: 1.5px solid var(--gris-200);
+  min-width: 200px; max-width: 240px;
+  white-space: normal;
+}
+#rep-tabla thead th:nth-child(1) { background: var(--gris-50,#f8fafc); z-index: 3; }
+/* Sticky: Inscrito desde */
+#rep-tabla th:nth-child(2), #rep-tabla td:nth-child(2) {
+  position: sticky; left: 200px; z-index: 2;
+  background: #fff; border-right: 1px solid var(--gris-200);
+  min-width: 110px;
+}
+#rep-tabla thead th:nth-child(2) { background: var(--gris-50,#f8fafc); z-index: 3; }
+/* Sticky: % Asist */
+#rep-tabla th:nth-child(3), #rep-tabla td:nth-child(3) {
+  position: sticky; left: 310px; z-index: 2;
+  background: #fff; border-right: 1px solid var(--gris-200);
+  min-width: 80px;
+}
+#rep-tabla thead th:nth-child(3) { background: var(--gris-50,#f8fafc); z-index: 3; }
+/* Sticky: Pres */
+#rep-tabla th:nth-child(4), #rep-tabla td:nth-child(4) {
+  position: sticky; left: 390px; z-index: 2;
+  background: #d1fae5;
+  min-width: 70px; border-right: 1px solid #86efac;
+}
+#rep-tabla thead th:nth-child(4) { z-index: 3; }
+/* Sticky: Aus */
+#rep-tabla th:nth-child(5), #rep-tabla td:nth-child(5) {
+  position: sticky; left: 460px; z-index: 2;
+  background: #fee2e2;
+  min-width: 70px; border-right: 2px solid var(--gris-200);
+}
+#rep-tabla thead th:nth-child(5) { z-index: 3; }
+/* Session columns */
+#rep-tabla th:nth-child(n+6), #rep-tabla td:nth-child(n+6) {
+  min-width: 58px; max-width: 62px; text-align: center;
+}
+/* Hover row */
+#rep-tabla tbody tr:hover td { background: var(--azul-soft) !important; }
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); }
@@ -1425,40 +1484,11 @@ select.form-input { cursor: pointer; }
         <div class="form-group"><label class="form-label">Fecha nacimiento</label><input class="form-input" type="date" id="asist-nuevo-fecha"/></div>
         <div class="form-group"><label class="form-label">Género</label><select class="form-input" id="asist-nuevo-genero"><option value="">SIN ESPECIFICAR</option><option value="FEMENINO">FEMENINO</option><option value="MASCULINO">MASCULINO</option><option value="OTRO">OTRO</option></select></div>
         <div class="form-group"><label class="form-label">Sector</label><input class="form-input" id="asist-nuevo-sector" placeholder="VILLA O SECTOR" oninput="toUpper(this)" style="text-transform:uppercase;"/></div>
-        <div class="form-group"><label class="form-label">¿Migrante?</label><select class="form-input" id="asist-nuevo-migrante"><option value="No">No</option><option value="Sí">Sí</option></select></div>
-        <div class="form-group"><label class="form-label">Pueblo indígena</label><select class="form-input" id="asist-nuevo-pueblo"><option value="No">Ninguno</option><option value="Mapuche">Mapuche</option><option value="Aymara">Aymara</option><option value="Diaguita">Diaguita</option><option value="Otro">Otro</option></select></div>
-      </div>
-      <div class="modal-footer" style="margin-top:12px;padding-top:0;">
-        <div style="background:var(--azul-soft);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.78rem;color:var(--azul);">
-          💡 Solo quedará marcado Presente en esta sesión. Para inscribirlo al taller ve a <b>Participantes</b>.
+        <div class="form-group"><label class="form-label">¿Migrante?</label><select class="form-input" id="asist-nuevo-migrante"><option value="No">No</option><option value="Sí">Sí</option>
+              </select></div>
+            </div>
+          </div>
         </div>
-        <button class="btn btn-primary" onclick="asistRegistrarNuevo()">✅ Marcar presente en esta sesión</button>
-      </div>
-    </div>
-  </div>
-</div>
-  <!-- Modal: Clase cancelada -->
-  <div class="modal-overlay" id="modal-cancelar-sesion">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <div>
-          <div class="modal-title">⚠️ Marcar clase como cancelada</div>
-          <div class="modal-sub">Esta sesión quedará registrada como cancelada para todos los participantes</div>
-        </div>
-        <button class="btn-modal-close" onclick="cerrarModal('modal-cancelar-sesion')">✕</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Motivo de cancelación <span style="font-weight:400;color:var(--gris-400);">(opcional)</span></label>
-        <input class="form-input" id="cancelar-motivo-input"
-          placeholder="Ej: Feriado, lluvia, ausencia del monitor..."
-          maxlength="120"/>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="cerrarModal('modal-cancelar-sesion')">Cancelar</button>
-        <button class="btn" onclick="confirmarCancelarSesion()"
-          style="background:var(--naranja-soft);color:var(--naranja);der:1.5px solid #fcd34d;">
-          ⚠️ Confirmar cancelación
-        </button>
       </div>
     </div>
   </div>
@@ -2962,15 +2992,12 @@ function renderAsistenciaTabla() {
     var avatarCol= est==='P'?'var(--verde)':est==='A'?'var(--rojo)':est==='J'?'#7c3aed':'var(--azul)';
     var esVisitante = !(p.talleres||[]).includes(_asistTallId);
     return '<tr style="'+rowBg+(esVisitante?';border-left:3px solid #0891b2;':'')+'">'
-      +'<td><div style="display:flex;align-items:center;gap:10px;">'
-        +'<div class="p-avatar" style="background:'+(esVisitante?'var(--teal-soft)':avatarBg)+';color:'+(esVisitante?'var(--teal)':avatarCol)+';">'+escH((p.nombre||'?')[0])+'</div>'
-        +'<div>'
-          +'<div style="display:flex;align-items:center;gap:6px;">'
-            +'<b>'+escH(p.nombre||'—')+'</b>'
-            +(esVisitante?'<span style="background:var(--teal-soft);color:var(--teal);border-radius:20px;padding:1px 8px;font-size:0.68rem;font-weight:700;border:1px solid #67e8f9;">👤 Visitante</span>':'')
-            +(est==='J'?'<span style="font-size:0.7rem;color:#7c3aed;font-weight:600;">Justificado</span>':'')
-          +'</div>'
-          +(esVisitante?'<div style="font-size:0.72rem;color:var(--gris-400);">Solo esta sesión · Para inscribir ve a Participantes</div>':'')
+      +'<td><div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">'
+        +'<div class="p-avatar" style="flex-shrink:0;background:'+(esVisitante?'var(--teal-soft)':avatarBg)+';color:'+(esVisitante?'var(--teal)':avatarCol)+';">'+escH((p.nombre||'?')[0])+'</div>'
+        +'<div style="min-width:0;">'
+          +(esVisitante?'<div><span style="background:var(--teal-soft);color:var(--teal);border-radius:20px;padding:0px 7px;font-size:0.63rem;font-weight:700;border:1px solid #67e8f9;white-space:nowrap;">👤 Visitante</span></div>':'')
+          +(est==='J'?'<div><span style="font-size:0.63rem;color:#7c3aed;font-weight:700;">✓ Justificado</span></div>':'')
+          +'<b style="font-size:0.88rem;white-space:nowrap;">'+escH(p.nombre||'—')+'</b>'
         +'</div>'
       +'</div></td>'
       +'<td style="font-family:monospace;font-size:0.8rem;">'+escH(p.rut||'—')+'</td>'
@@ -3971,7 +3998,7 @@ function renderReporteAsistencias() {
   // ── Build table ──
   // Header: Participante | %Asist | Pres | Aus | fecha1 | fecha2 | ...
   var theadRow = document.getElementById('rep-thead-row');
-  theadRow.innerHTML = '<th style="min-width:180px;">Participante</th>'
+  theadRow.innerHTML = '<th>Participante</th>'
     + '<th style="text-align:center;">Inscrito desde</th>'
     + '<th style="text-align:center;">% Asist.</th>'
     + '<th style="text-align:center;background:#d1fae5;">✅ Pres.</th>'
@@ -3982,7 +4009,7 @@ function renderReporteAsistencias() {
         var dia    = d.getDate();
         var mes    = d.toLocaleString('es-CL',{month:'short'});
         var bg     = s.cancelada ? 'background:#fef3c7;' : '';
-        return '<th style="text-align:center;font-weight:600;font-size:0.72rem;min-width:54px;'+bg+'">'
+        return '<th style="text-align:center;font-weight:600;font-size:0.7rem;padding:6px 4px;'+bg+'">'
           +'<div>'+diaSem+'</div>'
           +'<div style="font-size:0.8rem;font-weight:800;color:var(--gris-800);">'+dia+'</div>'
           +'<div style="font-size:0.68rem;color:var(--gris-400);">'+mes+'</div>'
@@ -4024,17 +4051,19 @@ function renderReporteAsistencias() {
     }).join('');
 
     var esVisRep = !(p.talleres||[]).includes(tid);
-    return '<tr style="'+(esVisRep?'border-left:3px solid var(--teal);background:#fafffe;':'')+'">'
-      +'<td><div style="display:flex;align-items:center;gap:8px;">'
-        +'<div class="p-avatar" style="width:28px;height:28px;font-size:0.75rem;background:'+(esVisRep?'var(--teal-soft)':(pct<50?'var(--rojo-soft)':pct<75?'var(--naranja-soft)':'var(--verde-soft)'))+';color:'+(esVisRep?'var(--teal)':(pct<50?'var(--rojo)':pct<75?'var(--naranja)':'var(--verde)'))+';font-weight:700;">'+escH((p.nombre||'?')[0])+'</div>'
-        +'<div>'
-          +'<div style="display:flex;align-items:center;gap:6px;">'
-            +'<span style="font-weight:700;font-size:0.85rem;">'+escH(p.nombre||'—')+'</span>'
-            +(esVisRep?'<span style="background:var(--teal-soft);color:var(--teal);border-radius:20px;padding:1px 8px;font-size:0.68rem;font-weight:700;border:1px solid #67e8f9;white-space:nowrap;">👤 Visitante</span>':'')
+    var desde    = esVisRep ? null : getFechaInscripcion(p, tid);
+    var avBg = esVisRep?'var(--teal-soft)':(pct<50?'var(--rojo-soft)':pct<75?'var(--naranja-soft)':'var(--verde-soft)');
+    var avCl = esVisRep?'var(--teal)':(pct<50?'var(--rojo)':pct<75?'var(--naranja)':'var(--verde)');
+    return '<tr style="'+(esVisRep?'border-left:3px solid var(--teal);background:#f0fdfa;':'')+'">'
+      +'<td>'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">'
+          +'<div class="p-avatar" style="width:28px;height:28px;font-size:0.75rem;flex-shrink:0;background:'+avBg+';color:'+avCl+';font-weight:700;">'+escH((p.nombre||'?')[0])+'</div>'
+          +'<div style="min-width:0;">'
+            +(esVisRep?'<div style="margin-bottom:2px;"><span style="background:var(--teal-soft);color:var(--teal);border-radius:20px;padding:0 6px;font-size:0.62rem;font-weight:700;border:1px solid #67e8f9;white-space:nowrap;">👤 Visitante</span></div>':'')
+            +'<div style="font-weight:700;font-size:0.84rem;line-height:1.3;">'+escH(p.nombre||'—')+'</div>'
           +'</div>'
-          +(esVisRep?'<div style="font-size:0.7rem;color:var(--gris-400);">Asistencia solo en sesiones registradas</div>':'')
         +'</div>'
-      +'</div></td>'
+      +'</td>'
       +'<td style="text-align:center;font-size:0.8rem;color:var(--gris-400);">'
         +(desde?fmtFecha(desde):'<span style="color:var(--gris-400);">—</span>')
       +'</td>'
@@ -4481,13 +4510,13 @@ function confirmarQuitarTaller() {
 
   var p      = parts[idx];
   var hoy    = new Date().toISOString().slice(0,10);
-  var desde  = getFechaInscripcion(p, _qtTallId) || p.creadoEn || '';
 
   // Move to history
   if (!p.talleresHistorial) p.talleresHistorial = [];
+  var desdeTall = getFechaInscripcion(p, _qtTallId) || p.creadoEn || hoy;
   p.talleresHistorial.push({
     tid:    _qtTallId,
-    desde:  desde.slice(0,10),
+    desde:  String(desdeTall).slice(0,10),
     hasta:  hoy,
     motivo: motivo || 'Sin especificar'
   });
@@ -4896,6 +4925,7 @@ function exportarAsistenciaCSV(periodo) {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   showToast('✅ Excel descargado correctamente','verde');
 }
+
 
 
 </script>
