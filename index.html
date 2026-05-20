@@ -1533,6 +1533,28 @@ function initTelBlur(input) {
   if (input.value.trim() === '+56') input.value = '';
 }
 
+
+// ─── Fecha de inscripción al taller ───
+function getFechaInscripcion(p, tid) {
+  // Returns inscription date or null (null = from beginning / no restriction)
+  if (!p.talleresInfo || !p.talleresInfo[tid]) return null;
+  return p.talleresInfo[tid].desde || null;
+}
+
+function estabaInscritoEnPeriodo(p, tid, fechaSesion) {
+  // Check active enrollment
+  if ((p.talleres||[]).includes(tid)) {
+    var desde = getFechaInscripcion(p, tid);
+    if (!desde) return true;
+    return fechaSesion >= desde;
+  }
+  // Check historical enrollment
+  var hist = (p.talleresHistorial||[]).filter(function(h){ return h.tid === tid; });
+  return hist.some(function(h){
+    var ok = (!h.desde || fechaSesion >= h.desde) && (!h.hasta || fechaSesion <= h.hasta);
+    return ok;
+  });
+}
 // ═══════════════════════════════════════
 //  FIREBASE CONFIG
 // ═══════════════════════════════════════
@@ -1577,6 +1599,21 @@ function fbBadge(msg, tipo) {
 }
 
 // ── Helpers Firestore ──
+// Load equipo from Firebase into localStorage
+function fbCargarEquipo(cb) {
+  if (!_fbOk) { if(cb) cb(); return; }
+  _db.collection('equipo').doc('all').get().then(function(doc) {
+    if (doc.exists && doc.data().list) {
+      lsSet(KEYS.equipo, doc.data().list);
+      console.log('[FB] Equipo cargado:', doc.data().list.length, 'miembros');
+    }
+    if (cb) cb();
+  }).catch(function(e) {
+    console.warn('[FB] Error cargando equipo:', e.message);
+    if (cb) cb();
+  });
+}
+
 function fbSet(col, id, data) {
   if (!_fbOk) return Promise.resolve();
   return _db.collection(col).doc(String(id)).set(data)
@@ -1721,16 +1758,46 @@ function doLogin() {
   btn.textContent = 'Verificando...'; btn.disabled = true;
   errEl.classList.remove('show');
 
-  setTimeout(function() {
+  function tryLogin() {
     var user = findUser(email, pass);
-    if (!user) {
+    if (user) {
+      saveSession(user);
+      btn.textContent = 'Iniciando...';
+      setTimeout(function(){ initApp(user); }, 300);
+    } else {
       errEl.classList.add('show');
       btn.textContent = 'Iniciar sesión →'; btn.disabled = false;
-      return;
     }
-    saveSession(user);
-    btn.textContent = 'Iniciando...';
-    setTimeout(function(){ initApp(user); }, 300);
+  }
+
+  setTimeout(function() {
+    var user = findUser(email, pass);
+    if (user) {
+      // Found locally
+      saveSession(user);
+      btn.textContent = 'Iniciando...';
+      setTimeout(function(){ initApp(user); }, 300);
+    } else if (_fbOk) {
+      // Not found locally → sync equipo from Firebase and retry
+      btn.textContent = 'Sincronizando...';
+      fbCargarEquipo(function() {
+        tryLogin();
+      });
+    } else {
+      // Firebase not ready → wait for it then retry
+      btn.textContent = 'Conectando...';
+      var attempts = 0;
+      var wait = setInterval(function() {
+        attempts++;
+        if (_fbOk) {
+          clearInterval(wait);
+          fbCargarEquipo(function() { tryLogin(); });
+        } else if (attempts > 10) {
+          clearInterval(wait);
+          tryLogin(); // try anyway
+        }
+      }, 500);
+    }
   }, 400);
 }
 
@@ -1742,6 +1809,9 @@ document.addEventListener('keydown', function(e){
 });
 
 function doLogout() {
+  fbDesactivarListeners();
+  clearTimeout(_sessionTimer);
+  clearTimeout(_sessionWarning);
   clearSession();
   document.getElementById('app').classList.remove('active');
   document.getElementById('login-screen').style.display = 'flex';
@@ -2079,7 +2149,9 @@ function renderParticipantes() {
     return '<tr>'
       +'<td><div style="display:flex;align-items:center;gap:10px;">'
         +'<div class="p-avatar">'+escH((p.nombre||'?')[0].toUpperCase())+'</div>'
-        +'<div><b>'+escH(p.nombre||'—')+'</b><div style="font-size:0.75rem;color:var(--gris-400);">'+escH(p.sector||'')+'</div></div>'
+        +'<div><b>'+escH(p.nombre||'—')+'</b>'
+          +'<div style="font-size:0.75rem;color:var(--gris-400);">'+escH(p.sector||'')+'</div>'
+        +'</div>'
       +'</div></td>'
       +'<td style="font-family:monospace;font-size:0.82rem;">'+escH(p.rut||'—')+'</td>'
       +'<td>'+(edad!==null?edad+' años':'<span style="color:var(--gris-400);font-style:italic;">Pendiente</span>')+'</td>'
@@ -2087,7 +2159,17 @@ function renderParticipantes() {
       +'<td style="font-size:0.82rem;">'+escH(p.sector||'—')+'</td>'
       +'<td>'+(p.migrante==='Sí'?'<span class="badge badge-naranja">Sí</span>':'<span class="badge badge-gris">No</span>')+'</td>'
       +'<td>'+(p.pueblo&&p.pueblo!=='No'?'<span class="badge badge-verde" style="font-size:0.68rem;">'+escH(p.pueblo)+'</span>':'<span class="badge badge-gris">—</span>')+'</td>'
-      +'<td><span class="badge badge-azul">'+tallCount+' taller'+(tallCount!==1?'es':'')+'</span></td>'
+      +'<td>'
+        +((p.talleres||[]).map(function(tid){
+            var t = getTalleres().find(function(t){ return t.id===tid; });
+            if (!t) return '';
+            return '<span style="display:inline-flex;align-items:center;gap:4px;margin:2px;">'
+              +'<span class="badge badge-azul">'+escH(t.emoji+' '+t.nombre)+'</span>'
+              +'<button class="btn-qt" data-pid="'+p.id+'" data-tid="'+t.id+'" data-pnombre="'+escH(p.nombre)+'" data-tnombre="'+escH(t.nombre)+'" '
+              +'style="width:18px;height:18px;border-radius:50%;border:none;background:#fee2e2;color:#dc2626;font-size:0.65rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;" title="Quitar taller">✕</button>'
+              +'</span>';
+          }).join('') || '<span style="color:var(--gris-400);font-size:0.8rem;">Sin taller</span>')
+      +'</td>'
       +'<td>'+asistBar(asistPct.pres, asistPct.total)+'</td>'
       +'<td class="td-actions">'
         +'<button class="btn btn-outline btn-sm btn-icon" onclick="editarParticipante(\''+p.id+'\')">✏️</button>'
@@ -2182,11 +2264,18 @@ function guardarParticipante() {
     if (idx>=0) {
       var oldTalls = parts[idx].talleres||[];
       var newTalls = tallerId&&!oldTalls.includes(tallerId) ? oldTalls.concat([tallerId]) : oldTalls;
-      parts[idx] = Object.assign(parts[idx], {nombre,rut,fechaNac,genero,tel,sector,email,migrante,pueblo,talleres:newTalls});
+      var oldInfo  = parts[idx].talleresInfo || {};
+      if (tallerId && !oldTalls.includes(tallerId)) {
+        oldInfo[tallerId] = { desde: new Date().toISOString().slice(0,10) };
+      }
+      parts[idx] = Object.assign(parts[idx], {nombre,rut,fechaNac,genero,tel,sector,email,migrante,pueblo,talleres:newTalls,talleresInfo:oldInfo});
     }
   } else {
     var talleres = tallerId ? [tallerId] : [];
-    parts.push({ id:uid(), nombre,rut,fechaNac,genero,tel,sector,email,migrante,pueblo, talleres, creadoEn:new Date().toLocaleString('es-CL') });
+    var hoyISO = new Date().toISOString().slice(0,10);
+    var talleresInfo = {};
+    if (tallerId) talleresInfo[tallerId] = { desde: hoyISO };
+    parts.push({ id:uid(), nombre,rut,fechaNac,genero,tel,sector,email,migrante,pueblo, talleres, talleresInfo, creadoEn:new Date().toLocaleString('es-CL') });
   }
 
   saveParticipantes(parts);
@@ -2316,7 +2405,14 @@ function verDetalleTaller(id) {
 
 function renderDetalleTaller() {
   var id    = _detalleTallId;
-  var parts = getParticipantes().filter(function(p){ return (p.talleres||[]).includes(id); });
+  // Include active AND historical participants
+  var allParts2 = getParticipantes();
+  var partsActivos   = allParts2.filter(function(p){ return (p.talleres||[]).includes(id); });
+  var partsHistorial = allParts2.filter(function(p){
+    if ((p.talleres||[]).includes(id)) return false;
+    return (p.talleresHistorial||[]).some(function(h){ return h.tid===id; });
+  });
+  var parts = partsActivos.concat(partsHistorial);
   var ses   = getSesiones(id).filter(function(s){ return !s.suspendida; });
   var asist = getAsistencias(id);
   var pres=0,pos=0;
@@ -2399,7 +2495,11 @@ function asignarParticipante(pid) {
   var idx = parts.findIndex(function(p){ return p.id===pid; });
   if (idx<0) return;
   if (!parts[idx].talleres) parts[idx].talleres=[];
-  if (!parts[idx].talleres.includes(_detalleTallId)) parts[idx].talleres.push(_detalleTallId);
+  if (!parts[idx].talleres.includes(_detalleTallId)) {
+    parts[idx].talleres.push(_detalleTallId);
+    if (!parts[idx].talleresInfo) parts[idx].talleresInfo = {};
+    parts[idx].talleresInfo[_detalleTallId] = { desde: new Date().toISOString().slice(0,10) };
+  }
   saveParticipantes(parts);
   cerrarModal('modal-asignar');
   renderDetalleTaller();
@@ -3056,9 +3156,9 @@ function asistRegistrarNuevo() {
     parts.push({
       id: pid, nombre, rut, fechaNac, genero, sector,
       tel: '', email: '', migrante: 'NO', pueblo: 'NO',
-      talleres: [], // empty — not added to taller
+      talleres: [], talleresInfo: {},
       creadoEn: new Date().toLocaleString('es-CL'),
-      soloSesion: true // flag: added only for session
+      soloSesion: true
     });
     saveParticipantes(parts);
   }
@@ -3224,10 +3324,15 @@ function renderEstadisticas() {
     var sesActivas = sesFilt.filter(function(s){return !s.cancelada;});
     var asist = getAsistencias(t.id);
 
-    // Count ALL participants with attendance records (enrolled + visitors)
+    // Count ALL participants: active + historical + visitors
     var allPidsInTaller = {};
-    parts.forEach(function(p){ if((p.talleres||[]).includes(t.id)) allPidsInTaller[p.id]=p; });
-    // Add visitors (have attendance records but not enrolled)
+    parts.forEach(function(p){
+      if ((p.talleres||[]).includes(t.id)) { allPidsInTaller[p.id]=p; return; }
+      // Check historial
+      var hist = (p.talleresHistorial||[]).filter(function(h){ return h.tid===t.id; });
+      if (hist.length) allPidsInTaller[p.id] = p;
+    });
+    // Add visitors (attendance records but not enrolled or in historial)
     Object.keys(asist).forEach(function(pid){
       if (!allPidsInTaller[pid]) {
         var p = parts.find(function(x){ return x.id===pid; });
@@ -3237,9 +3342,11 @@ function renderEstadisticas() {
 
     Object.values(allPidsInTaller).forEach(function(p) {
       sesActivas.forEach(function(s) {
+        // Only count if participant was enrolled on this session date
+        if (!estabaInscritoEnPeriodo(p, t.id, s.fecha)) return;
         var v = (asist[p.id]||{})[s.fecha]||'';
-        if (!v) return; // sin registro = no cuenta
-        if (v === 'J') return; // Justificado: no cuenta en %
+        if (!v) return;
+        if (v === 'J') return;
         totalPos++;
         if (v === 'P') {
           totalPres++;
@@ -3268,9 +3375,17 @@ function renderEstadisticas() {
 
   // partsFilt = enrolled + visitors with attendance records
   var partsFilt = parts.filter(function(p) {
-    var inscrito  = tallersConSesiones.some(function(t) { return (p.talleres||[]).includes(t.id); });
-    var visitante = pidsConAsist[p.id];
-    return inscrito || visitante;
+    // Visitors always included if they have attendance
+    if (pidsConAsist[p.id] && !(p.talleres||[]).length) return true;
+    // Enrolled: check if they were enrolled during the period
+    return tallersConSesiones.some(function(t) {
+      if (!(p.talleres||[]).includes(t.id)) return false;
+      var desde = getFechaInscripcion(p, t.id);
+      if (!desde) return true; // no date = always enrolled
+      // Check overlap with filtered sessions
+      var ses = filtrarSes(t.id);
+      return ses.some(function(s){ return s.fecha >= desde; });
+    });
   });
 
   // Reset and recalculate from partsFilt
@@ -3823,6 +3938,7 @@ function renderReporteAsistencias() {
   // Header: Participante | %Asist | Pres | Aus | fecha1 | fecha2 | ...
   var theadRow = document.getElementById('rep-thead-row');
   theadRow.innerHTML = '<th style="min-width:180px;">Participante</th>'
+    + '<th style="text-align:center;">Inscrito desde</th>'
     + '<th style="text-align:center;">% Asist.</th>'
     + '<th style="text-align:center;background:#d1fae5;">✅ Pres.</th>'
     + '<th style="text-align:center;background:#fee2e2;">❌ Aus.</th>'
@@ -3849,10 +3965,14 @@ function renderReporteAsistencias() {
 
   document.getElementById('rep-tbody').innerHTML = partsOrdered.map(function(p){
     var ua     = asist[p.id] || {};
-    var pres   = sesActivas.filter(function(s){ return ua[s.fecha]==='P'; }).length;
-    var aus    = sesActivas.filter(function(s){ return ua[s.fecha]==='A'; }).length;
-    var just   = sesActivas.filter(function(s){ return ua[s.fecha]==='J'; }).length;
-    var total  = sesActivas.filter(function(s){ return ua[s.fecha]!=='J'; }).length; // J excluded
+    // Only count sessions when participant was enrolled (active or historical)
+    var sesParticipante = sesActivas.filter(function(s){
+      return estabaInscritoEnPeriodo(p, tid, s.fecha);
+    });
+    var pres   = sesParticipante.filter(function(s){ return ua[s.fecha]==='P'; }).length;
+    var aus    = sesParticipante.filter(function(s){ return ua[s.fecha]==='A'; }).length;
+    var just   = sesParticipante.filter(function(s){ return ua[s.fecha]==='J'; }).length;
+    var total  = sesParticipante.filter(function(s){ return ua[s.fecha]!=='J'; }).length;
     var pct    = total>0 ? Math.round(pres/total*100) : 0;
     var pctCol = pct>=75?'var(--verde)':pct>=50?'var(--naranja)':'var(--rojo)';
 
@@ -3881,6 +4001,9 @@ function renderReporteAsistencias() {
           +(esVisRep?'<div style="font-size:0.7rem;color:var(--gris-400);">Asistencia solo en sesiones registradas</div>':'')
         +'</div>'
       +'</div></td>'
+      +'<td style="text-align:center;font-size:0.8rem;color:var(--gris-400);">'
+        +(desde?fmtFecha(desde):'<span style="color:var(--gris-400);">—</span>')
+      +'</td>'
       +'<td style="text-align:center;">'
         +'<span style="font-weight:800;font-size:0.9rem;color:'+pctCol+';">'+pct+'%</span>'
       +'</td>'
@@ -4168,6 +4291,21 @@ function eliminarEquipo(id, nombre) {
   });
 }
 
+// ── Quitar taller event delegation ──
+document.addEventListener('click', function(e) {
+  var qt = e.target.closest('.btn-qt');
+  if (qt) {
+    e.stopPropagation();
+    abrirModalQuitarTaller(
+      qt.getAttribute('data-pid'),
+      qt.getAttribute('data-tid'),
+      qt.getAttribute('data-pnombre'),
+      qt.getAttribute('data-tnombre')
+    );
+    return;
+  }
+});
+
 // ── Asistencia P/A/J event delegation ──
 document.addEventListener('click', function(e) {
   var bp = e.target.closest('.btn-asist-p');
@@ -4276,6 +4414,63 @@ function guardarNuevaClave() {
   showToast('✅ Contraseña actualizada correctamente', 'verde');
 }
 
+
+
+// ═══════════════════════════════════════
+//  QUITAR TALLER A PARTICIPANTE
+// ═══════════════════════════════════════
+var _qtPartId  = null;
+var _qtTallId  = null;
+
+function abrirModalQuitarTaller(partId, tallId, partNombre, tallNombre) {
+  _qtPartId = partId;
+  _qtTallId = tallId;
+  document.getElementById('qt-sub').textContent = partNombre + ' · ' + tallNombre;
+  document.getElementById('qt-motivo-sel').value = '';
+  document.getElementById('qt-motivo-otro').value = '';
+  document.getElementById('qt-otro-wrap').style.display = 'none';
+  abrirModal('modal-quitar-taller');
+}
+
+function toggleQtOtro(val) {
+  document.getElementById('qt-otro-wrap').style.display = val === 'Otro' ? '' : 'none';
+}
+
+function confirmarQuitarTaller() {
+  var sel    = document.getElementById('qt-motivo-sel').value;
+  var otro   = document.getElementById('qt-motivo-otro').value.trim();
+  var motivo = sel === 'Otro' ? (otro || 'Otro') : sel;
+
+  var parts  = getParticipantes();
+  var idx    = parts.findIndex(function(p){ return p.id === _qtPartId; });
+  if (idx < 0) return;
+
+  var p      = parts[idx];
+  var hoy    = new Date().toISOString().slice(0,10);
+  var desde  = getFechaInscripcion(p, _qtTallId) || p.creadoEn || '';
+
+  // Move to history
+  if (!p.talleresHistorial) p.talleresHistorial = [];
+  p.talleresHistorial.push({
+    tid:    _qtTallId,
+    desde:  desde.slice(0,10),
+    hasta:  hoy,
+    motivo: motivo || 'Sin especificar'
+  });
+
+  // Remove from active talleres
+  p.talleres = (p.talleres||[]).filter(function(t){ return t !== _qtTallId; });
+
+  // Remove from talleresInfo
+  if (p.talleresInfo) delete p.talleresInfo[_qtTallId];
+
+  parts[idx] = p;
+  saveParticipantes(parts);
+
+  cerrarModal('modal-quitar-taller');
+  renderParticipantes();
+  showToast('Taller removido y guardado en historial ✅', 'verde');
+}
 
 // ═══════════════════════════════════════
 //  CIERRE AUTOMÁTICO DE SESIÓN — 30 min
@@ -4396,6 +4591,155 @@ function initSessionTimeout() {
     document.addEventListener(ev, resetSessionTimer, { passive: true });
   });
   resetSessionTimer();
+}
+
+
+// ═══════════════════════════════════════
+//  LISTENERS TIEMPO REAL (Firestore)
+// ═══════════════════════════════════════
+var _listeners = [];
+
+function fbActivarListeners() {
+  if (!_fbOk) return;
+
+  // ── Participantes ──
+  _listeners.push(
+    _db.collection('participantes').doc('all').onSnapshot(function(doc) {
+      if (!doc.exists) return;
+      var data = doc.data().list;
+      if (!data) return;
+      var local = JSON.parse(localStorage.getItem(KEYS.participantes)||'[]');
+      // Only update if data changed
+      if (JSON.stringify(data) !== JSON.stringify(local)) {
+        lsSet(KEYS.participantes, data);
+        console.log('[RT] Participantes actualizados:', data.length);
+        if (_session) refreshCurrentPanel(['participantes','estadisticas','asistencia','asist_reporte','talleres','dashboard']);
+      }
+    }, function(e){ console.warn('[RT] participantes:', e.message); })
+  );
+
+  // ── Talleres ──
+  _listeners.push(
+    _db.collection('talleres').doc('all').onSnapshot(function(doc) {
+      if (!doc.exists) return;
+      var data = doc.data().list;
+      if (!data) return;
+      var local = JSON.parse(localStorage.getItem(KEYS.talleres)||'[]');
+      if (JSON.stringify(data) !== JSON.stringify(local)) {
+        lsSet(KEYS.talleres, data);
+        console.log('[RT] Talleres actualizados:', data.length);
+        if (_session) refreshCurrentPanel(['talleres','asistencia','estadisticas','asist_reporte','dashboard']);
+      }
+    }, function(e){ console.warn('[RT] talleres:', e.message); })
+  );
+
+  // ── Sesiones (all taller IDs) ──
+  _listeners.push(
+    _db.collection('sesiones').onSnapshot(function(snap) {
+      var all = JSON.parse(localStorage.getItem(KEYS.sesiones)||'{}');
+      var changed = false;
+      snap.forEach(function(doc) {
+        var tid  = doc.id;
+        var data = doc.data().list;
+        if (!data) return;
+        if (JSON.stringify(all[tid]) !== JSON.stringify(data)) {
+          all[tid] = data;
+          changed  = true;
+        }
+      });
+      if (changed) {
+        lsSet(KEYS.sesiones, all);
+        console.log('[RT] Sesiones actualizadas');
+        if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte']);
+      }
+    }, function(e){ console.warn('[RT] sesiones:', e.message); })
+  );
+
+  // ── Asistencias ──
+  _listeners.push(
+    _db.collection('asistencias').onSnapshot(function(snap) {
+      var all = JSON.parse(localStorage.getItem(KEYS.asistencias)||'{}');
+      var changed = false;
+      snap.forEach(function(doc) {
+        var tid  = doc.id;
+        var data = doc.data();
+        if (!data) return;
+        if (JSON.stringify(all[tid]) !== JSON.stringify(data)) {
+          all[tid] = data;
+          changed  = true;
+        }
+      });
+      if (changed) {
+        lsSet(KEYS.asistencias, all);
+        console.log('[RT] Asistencias actualizadas');
+        if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte','dashboard']);
+      }
+    }, function(e){ console.warn('[RT] asistencias:', e.message); })
+  );
+
+  // ── Equipo ──
+  _listeners.push(
+    _db.collection('equipo').doc('all').onSnapshot(function(doc) {
+      if (!doc.exists) return;
+      var data = doc.data().list;
+      if (!data) return;
+      lsSet(KEYS.equipo, data);
+      console.log('[RT] Equipo actualizado');
+      if (_session) refreshCurrentPanel(['equipo']);
+    }, function(e){ console.warn('[RT] equipo:', e.message); })
+  );
+
+  console.log('[RT] ✅ Listeners activados — sincronización en tiempo real');
+}
+
+function refreshCurrentPanel(panels) {
+  // Only refresh if the user is on one of the affected panels
+  if (!panels.includes(_currentPanel)) return;
+
+  // Debounce — avoid multiple rapid re-renders
+  clearTimeout(refreshCurrentPanel._timer);
+  refreshCurrentPanel._timer = setTimeout(function() {
+    var renders = {
+      dashboard:     renderDashboard,
+      participantes: renderParticipantes,
+      talleres:      renderTalleres,
+      actividades:   renderActividades,
+      asistencia:    renderAsistenciaTabla,
+      estadisticas:  renderEstadisticas,
+      asist_reporte: renderReporteAsistencias,
+      equipo:        renderEquipo,
+    };
+    if (renders[_currentPanel]) {
+      renders[_currentPanel]();
+      // Show a subtle sync indicator
+      showSyncBadge();
+    }
+  }, 600); // wait 600ms to batch changes
+}
+
+function showSyncBadge() {
+  var el = document.getElementById('sync-badge');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sync-badge';
+    el.style.cssText = 'position:fixed;top:70px;right:16px;z-index:300;'
+      + 'background:#d1fae5;color:#065f46;padding:5px 12px;border-radius:20px;'
+      + 'font-size:0.72rem;font-weight:700;font-family:Inter,sans-serif;'
+      + 'box-shadow:0 2px 8px rgba(0,0,0,0.1);transition:opacity .3s;';
+    document.body.appendChild(el);
+  }
+  el.textContent = '🔄 Datos actualizados';
+  el.style.opacity = '1';
+  clearTimeout(showSyncBadge._hide);
+  showSyncBadge._hide = setTimeout(function(){
+    el.style.opacity = '0';
+    setTimeout(function(){ if(el.parentNode) el.remove(); }, 400);
+  }, 2500);
+}
+
+function fbDesactivarListeners() {
+  _listeners.forEach(function(unsub){ try{ unsub(); }catch(e){} });
+  _listeners = [];
 }
 
 window.addEventListener('load', function() {
@@ -4643,6 +4987,42 @@ function exportarAsistenciaCSV(periodo) {
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cerrarModal('modal-cambiar-clave')">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarNuevaClave()">💾 Guardar nueva contraseña</button>
+      </div>
+    </div>
+  </div>
+  <!-- Modal: Quitar taller a participante -->
+  <div class="modal-overlay" id="modal-quitar-taller">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">🗑️ Quitar taller</div>
+          <div class="modal-sub" id="qt-sub"></div>
+        </div>
+        <button class="btn-modal-close" onclick="cerrarModal('modal-quitar-taller')">✕</button>
+      </div>
+      <div style="background:var(--naranja-soft);border-radius:9px;padding:10px 14px;margin-bottom:16px;font-size:0.82rem;color:var(--naranja);">
+        ⚠️ El historial de asistencias se mantendrá para registros históricos.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motivo de retiro <span style="font-weight:400;color:var(--gris-400);">(opcional)</span></label>
+        <select class="form-input" id="qt-motivo-sel" onchange="toggleQtOtro(this.value)">
+          <option value="">Selecciona un motivo...</option>
+          <option value="Dejó de asistir">Dejó de asistir</option>
+          <option value="Error de asignación">Error de asignación</option>
+          <option value="Cambio de taller">Cambio de taller</option>
+          <option value="Problemas de salud">Problemas de salud</option>
+          <option value="Cambio de horario">Cambio de horario</option>
+          <option value="Motivos personales">Motivos personales</option>
+          <option value="Otro">Otro...</option>
+        </select>
+      </div>
+      <div class="form-group" id="qt-otro-wrap" style="display:none;">
+        <label class="form-label">Especifica el motivo</label>
+        <input class="form-input" id="qt-motivo-otro" placeholder="Describe el motivo..."/>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="cerrarModal('modal-quitar-taller')">Cancelar</button>
+        <button class="btn btn-danger" onclick="confirmarQuitarTaller()">🗑️ Confirmar retiro</button>
       </div>
     </div>
   </div>
