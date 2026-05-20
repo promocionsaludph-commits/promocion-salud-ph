@@ -1456,7 +1456,14 @@ select.form-input { cursor: pointer; }
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cerrarModal('modal-cancelar-sesion')">Cancelar</button>
         <button class="btn" onclick="confirmarCancelarSesion()"
-          style="background:var(--naranja-soft);color:var(--naranja);bor
+          style="background:var(--naranja-soft);color:var(--naranja);der:1.5px solid #fcd34d;">
+          ⚠️ Confirmar cancelación
+        </button>
+      </div>
+    </div>
+  </div>
+
+<script>
 'use strict';
 
 
@@ -1773,6 +1780,8 @@ function initApp(user) {
   });
 
   syncFromFB(function() { navGo('dashboard'); });
+  initSessionTimeout();
+  initSessionTimeout();
 }
 
 // ═══════════════════════════════════════
@@ -4267,6 +4276,128 @@ function guardarNuevaClave() {
   showToast('✅ Contraseña actualizada correctamente', 'verde');
 }
 
+
+// ═══════════════════════════════════════
+//  CIERRE AUTOMÁTICO DE SESIÓN — 30 min
+// ═══════════════════════════════════════
+var SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+var _sessionTimer      = null;
+var _sessionWarning    = null;
+var WARNING_BEFORE_MS  = 2 * 60 * 1000;  // aviso 2 min antes
+
+function resetSessionTimer() {
+  // Restart inactivity timers on any user interaction
+  clearTimeout(_sessionTimer);
+  clearTimeout(_sessionWarning);
+  hideSessionWarning();
+  // Save last activity for cross-tab detection
+  localStorage.setItem('ph2_last_activity', Date.now().toString());
+
+  // Warning at 28 minutes
+  _sessionWarning = setTimeout(function() {
+    showSessionWarning();
+  }, SESSION_TIMEOUT_MS - WARNING_BEFORE_MS);
+
+  // Auto logout at 30 minutes
+  _sessionTimer = setTimeout(function() {
+    hideSessionWarning();
+    doLogout();
+    showToast('Sesión cerrada por inactividad (30 min)', 'rojo');
+  }, SESSION_TIMEOUT_MS);
+}
+
+function showSessionWarning() {
+  var el = document.getElementById('session-warning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'session-warning';
+    el.style.cssText = 'position:fixed;bottom:80px;right:24px;z-index:999;'
+      + 'background:#1e293b;color:#fff;border-radius:14px;padding:16px 20px;'
+      + 'box-shadow:0 8px 24px rgba(0,0,0,0.3);max-width:300px;font-family:Inter,sans-serif;'
+      + 'animation:slideIn .3s ease;';
+    el.innerHTML = '<div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;">⏱️ Sesión por expirar</div>'
+      + '<div style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:12px;">Tu sesión se cerrará en 2 minutos por inactividad.</div>'
+      + '<div style="display:flex;gap:8px;">'
+        + '<button onclick="resetSessionTimer()" style="flex:1;padding:8px;border-radius:8px;border:none;'
+          + 'background:#2563eb;color:#fff;font-weight:700;cursor:pointer;font-size:0.82rem;">Continuar</button>'
+        + '<button onclick="doLogout()" style="flex:1;padding:8px;border-radius:8px;border:none;'
+          + 'background:rgba(255,255,255,0.1);color:#fff;font-weight:600;cursor:pointer;font-size:0.82rem;">Cerrar sesión</button>'
+      + '</div>';
+    document.body.appendChild(el);
+  }
+  el.style.display = '';
+}
+
+function hideSessionWarning() {
+  var el = document.getElementById('session-warning');
+  if (el) el.style.display = 'none';
+}
+
+function initSessionTimeout() {
+  // Listen to any user activity
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev) {
+    document.addEventListener(ev, resetSessionTimer, { passive: true });
+  });
+  resetSessionTimer();
+}
+
+
+// ═══════════════════════════════════════
+//  CIERRE AUTOMÁTICO DE SESIÓN — 30 min
+// ═══════════════════════════════════════
+var SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+var _sessionTimer      = null;
+var _sessionWarning    = null;
+var WARNING_BEFORE_MS  = 2 * 60 * 1000;
+
+function resetSessionTimer() {
+  clearTimeout(_sessionTimer);
+  clearTimeout(_sessionWarning);
+  hideSessionWarning();
+  localStorage.setItem('ph2_last_activity', Date.now().toString());
+
+  _sessionWarning = setTimeout(function() {
+    showSessionWarning();
+  }, SESSION_TIMEOUT_MS - WARNING_BEFORE_MS);
+
+  _sessionTimer = setTimeout(function() {
+    hideSessionWarning();
+    doLogout();
+    showToast('Sesión cerrada por inactividad (30 min)', 'rojo');
+  }, SESSION_TIMEOUT_MS);
+}
+
+function showSessionWarning() {
+  var el = document.getElementById('session-warning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'session-warning';
+    el.style.cssText = 'position:fixed;bottom:80px;right:24px;z-index:999;'
+      + 'background:#1e293b;color:#fff;border-radius:14px;padding:16px 20px;'
+      + 'box-shadow:0 8px 24px rgba(0,0,0,0.3);max-width:300px;font-family:Inter,sans-serif;';
+    el.innerHTML = '<div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;">⏱️ Sesión por expirar</div>'
+      + '<div style="font-size:0.82rem;color:rgba(255,255,255,0.7);margin-bottom:12px;">Tu sesión se cerrará en 2 minutos por inactividad.</div>'
+      + '<div style="display:flex;gap:8px;">'
+        + '<button onclick="resetSessionTimer()" style="flex:1;padding:8px;border-radius:8px;border:none;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;font-size:0.82rem;">Continuar</button>'
+        + '<button onclick="doLogout()" style="flex:1;padding:8px;border-radius:8px;border:none;background:rgba(255,255,255,0.1);color:#fff;font-weight:600;cursor:pointer;font-size:0.82rem;">Cerrar sesión</button>'
+      + '</div>';
+    document.body.appendChild(el);
+  }
+  el.style.display = '';
+}
+
+function hideSessionWarning() {
+  var el = document.getElementById('session-warning');
+  if (el) el.style.display = 'none';
+}
+
+function initSessionTimeout() {
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(function(ev) {
+    document.addEventListener(ev, resetSessionTimer, { passive: true });
+  });
+  resetSessionTimer();
+}
+
 window.addEventListener('load', function() {
   // Check mobile
   if (window.innerWidth < 768) {
@@ -4290,13 +4421,21 @@ window.addEventListener('load', function() {
   // Check saved session
   var sess = getSession();
   if (sess) {
-    var validUser = findUser(sess.email, atob(sess.pass||''));
-    // Re-verify user still exists
-    if (validUser) {
-      initApp(validUser);
-      return;
-    } else {
+    // Check if session expired (30 min since last activity)
+    var lastAct = parseInt(localStorage.getItem('ph2_last_activity')||'0');
+    var elapsed = Date.now() - lastAct;
+    if (lastAct && elapsed > SESSION_TIMEOUT_MS) {
       clearSession();
+      localStorage.removeItem('ph2_last_activity');
+      console.log('[Session] Expirada por inactividad');
+    } else {
+      var validUser = findUser(sess.email, atob(sess.pass||''));
+      if (validUser) {
+        initApp(validUser);
+        return;
+      } else {
+        clearSession();
+      }
     }
   }
   // Show login
@@ -4380,12 +4519,9 @@ function exportarAsistenciaCSV(periodo) {
   showToast('✅ Excel descargado correctamente','verde');
 }
 
-sv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  showToast('✅ Excel descargado correctamente','verde');
-}
 
 </script>
+
   <!-- Modal: Asignar talleres a equipo -->
   <div class="modal-overlay" id="modal-asignar-talleres">
     <div class="modal">
