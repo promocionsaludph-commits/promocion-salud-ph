@@ -3907,6 +3907,40 @@ function renderReporteAsistencias() {
   }
 
   // ── Stats cards ──
+  // Build parts AFTER sesFilt so inscription-date filtering works correctly
+  var partsSet = {};
+  allParts.forEach(function(p) {
+    // Active enrollment
+    if ((p.talleres||[]).includes(tid)) {
+      var desde = getFechaInscripcion(p, tid);
+      // Include if no inscription date OR any session in period is >= inscription date
+      var hasOverlap = !desde || sesFilt.some(function(s){ return s.fecha >= desde; });
+      if (hasOverlap || !sesFilt.length) partsSet[p.id] = p;
+      return;
+    }
+    // Historical enrollment — include if they were enrolled during any session in period
+    var hist = (p.talleresHistorial||[]).filter(function(h){ return h.tid === tid; });
+    if (hist.length) {
+      var wasEnrolled = !sesFilt.length || hist.some(function(h){
+        return sesFilt.some(function(s){
+          return (!h.desde||s.fecha>=h.desde) && (!h.hasta||s.fecha<=h.hasta);
+        });
+      });
+      if (wasEnrolled) partsSet[p.id] = p;
+    }
+  });
+  // Add visitors (have attendance records but not enrolled)
+  Object.keys(asistAll).forEach(function(pid){
+    if (!partsSet[pid]) {
+      var p = allParts.find(function(x){ return x.id===pid; });
+      if (p && asistAll[pid]) {
+        var hadAttendance = sesFilt.some(function(s){ return asistAll[pid][s.fecha]; });
+        if (hadAttendance) partsSet[pid] = p;
+      }
+    }
+  });
+  var parts = Object.values(partsSet);
+
   var sesActivas = sesFilt.filter(function(s){ return !s.cancelada; });
   var totalPres=0, totalPos=0;
   parts.forEach(function(p){
