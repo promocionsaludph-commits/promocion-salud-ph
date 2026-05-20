@@ -1130,7 +1130,7 @@ select.form-input { cursor: pointer; }
         <span class="form-err" id="p-nombre-err">Ingresa el nombre completo.</span>
       </div>
       <div class="form-group">
-        <label class="form-label">RUT / Documento *</label>
+        <label class="form-label">RUT / Documento <span style="font-weight:400;color:var(--gris-400);">(opcional)</span></label>
         <input class="form-input" id="p-rut" placeholder="12.345.678-9 o pasaporte" oninput="formatearRut(this)" style="text-transform:uppercase;" maxlength="20"/>
         <span class="form-err" id="p-rut-err">Ingresa el RUT o documento.</span>
         <span style="font-size:0.72rem;color:var(--gris-400);margin-top:2px;">
@@ -1138,7 +1138,7 @@ select.form-input { cursor: pointer; }
         </span>
       </div>
       <div class="form-group">
-        <label class="form-label">Fecha de nacimiento *</label>
+        <label class="form-label">Fecha de nacimiento <span style="font-weight:400;color:var(--gris-400);">(opcional)</span></label>
         <input class="form-input" type="date" id="p-fechanac"/>
         <span class="form-err" id="p-fechanac-err">Selecciona la fecha de nacimiento.</span>
       </div>
@@ -1456,14 +1456,7 @@ select.form-input { cursor: pointer; }
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cerrarModal('modal-cancelar-sesion')">Cancelar</button>
         <button class="btn" onclick="confirmarCancelarSesion()"
-          style="background:var(--naranja-soft);color:var(--naranja);border:1.5px solid #fcd34d;font-weight:700;">
-          ⚠️ Confirmar cancelación
-        </button>
-      </div>
-    </div>
-  </div>
-
-<script>
+          style="background:var(--naranja-soft);color:var(--naranja);bor
 'use strict';
 
 
@@ -2080,7 +2073,7 @@ function renderParticipantes() {
         +'<div><b>'+escH(p.nombre||'—')+'</b><div style="font-size:0.75rem;color:var(--gris-400);">'+escH(p.sector||'')+'</div></div>'
       +'</div></td>'
       +'<td style="font-family:monospace;font-size:0.82rem;">'+escH(p.rut||'—')+'</td>'
-      +'<td>'+(edad!==null?edad+' años':'—')+'</td>'
+      +'<td>'+(edad!==null?edad+' años':'<span style="color:var(--gris-400);font-style:italic;">Pendiente</span>')+'</td>'
       +'<td>'+(p.genero?'<span class="badge '+(p.genero==='Femenino'?'badge-rojo':p.genero==='Masculino'?'badge-azul':'badge-gris')+'">'+escH(p.genero)+'</span>':'—')+'</td>'
       +'<td style="font-size:0.82rem;">'+escH(p.sector||'—')+'</td>'
       +'<td>'+(p.migrante==='Sí'?'<span class="badge badge-naranja">Sí</span>':'<span class="badge badge-gris">No</span>')+'</td>'
@@ -2163,16 +2156,17 @@ function guardarParticipante() {
   ['p-nombre','p-rut','p-fechanac'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('err'); });
   ['p-nombre-err','p-rut-err','p-fechanac-err'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); });
 
+  // Only nombre is required
   if (nombre.length<2) err('p-nombre','p-nombre-err','Ingresa el nombre completo.');
-  if (rut.length<4)    err('p-rut','p-rut-err','Ingresa el RUT o documento.');
-  if (!fechaNac)       err('p-fechanac','p-fechanac-err','Selecciona la fecha de nacimiento.');
   if (!ok) return;
 
   var parts = getParticipantes();
-  // Check duplicate RUT
-  var rutNorm = rut.replace(/[.\-\s]/g,'').toLowerCase();
-  var dup = parts.find(function(p){ return p.id!==_editPartId && (p.rut||'').replace(/[.\-\s]/g,'').toLowerCase()===rutNorm; });
-  if (dup) { err('p-rut','p-rut-err','RUT ya registrado: '+dup.nombre); return; }
+  // Check duplicate RUT only if provided
+  if (rut.length >= 4) {
+    var rutNorm = rut.replace(/[.\-\s]/g,'').toLowerCase();
+    var dup = parts.find(function(p){ return p.id!==_editPartId && (p.rut||'').replace(/[.\-\s]/g,'').toLowerCase()===rutNorm; });
+    if (dup) { err('p-rut','p-rut-err','RUT ya registrado: '+dup.nombre); return; }
+  }
 
   if (_editPartId) {
     var idx = parts.findIndex(function(p){ return p.id===_editPartId; });
@@ -2337,7 +2331,7 @@ function renderDetalleTaller() {
     var edad = calcEdad(p.fechaNac);
     return '<tr>'
       +'<td><b>'+escH(p.nombre)+'</b></td>'
-      +'<td style="font-family:monospace;font-size:0.8rem;">'+escH(p.rut||'—')+'</td>'
+      +'<td style="font-family:monospace;font-size:0.8rem;">'+(p.rut?escH(p.rut):'<span style="color:var(--gris-400);font-style:italic;">Pendiente</span>')+'</td>'
       +'<td>'+escH(p.genero||'—')+'</td>'
       +'<td>'+(edad!==null?edad+' años':'—')+'</td>'
       +'<td>'+asistBar(pr,ses.length)+'</td>'
@@ -3033,7 +3027,7 @@ function asistRegistrarNuevo() {
   var genero   = document.getElementById('asist-nuevo-genero').value;
   var sector   = document.getElementById('asist-nuevo-sector').value.trim();
 
-  if (!nombre || !rut) { showToast('Nombre y RUT son obligatorios','rojo'); return; }
+  if (!nombre) { showToast('El nombre es obligatorio','rojo'); return; }
 
   // Check if RUT already exists
   var rutNorm  = rut.replace(/[.\-\s]/g,'').toLowerCase();
@@ -4382,6 +4376,11 @@ function exportarAsistenciaCSV(periodo) {
   var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'Asistencia_'+nombre+'_'+sufijo+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  showToast('✅ Excel descargado correctamente','verde');
+}
+
+sv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   showToast('✅ Excel descargado correctamente','verde');
 }
