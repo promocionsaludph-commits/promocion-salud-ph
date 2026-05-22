@@ -4366,10 +4366,22 @@ function renderReporteAsistencias() {
   });
 
   document.getElementById('rep-tbody').innerHTML = partsOrdered.map(function(p){
-    var ua     = asist[p.id] || {};
-    // Only count sessions when participant was enrolled (active or historical)
+    var ua         = asist[p.id] || {};
+    // Determine visitor status FIRST (needed for % calc)
+    var estaActivo2    = (p.talleres||[]).includes(tid);
+    var estaHistorial2 = (p.talleresHistorial||[]).some(function(h){ return h.tid===tid; });
+    var esVisRep2      = !estaActivo2 && !estaHistorial2;
+    var desde2         = esVisRep2 ? null : getFechaInscripcion(p, tid);
+    // Count sessions that have an attendance record (P, A, or J)
+    // If no registration date conflict, count ALL sessions in period
+    // If participant joined mid-period, only count from their inscription date
+    var desde = esVisRep ? null : getFechaInscripcion(p, tid);
     var sesParticipante = sesActivas.filter(function(s){
-      return estabaInscritoEnPeriodo(p, tid, s.fecha);
+      // Always count if there's an actual attendance mark
+      var mark = ua[s.fecha];
+      if (mark === 'P' || mark === 'A' || mark === 'J') return true;
+      // For unmarked sessions, only count from inscription date onwards
+      return !desde2 || s.fecha >= desde2;
     });
     var pres   = sesParticipante.filter(function(s){ return ua[s.fecha]==='P'; }).length;
     var aus    = sesParticipante.filter(function(s){ return ua[s.fecha]==='A'; }).length;
@@ -4391,8 +4403,9 @@ function renderReporteAsistencias() {
         +'<span style="font-weight:700;font-size:0.82rem;color:'+col+';" title="'+(v==='J'?'Justificado':'')+'">'+lbl+'</span></td>';
     }).join('');
 
-    var esVisRep = !(p.talleres||[]).includes(tid);
-    var desde    = esVisRep ? null : getFechaInscripcion(p, tid);
+    // Check if participant is truly external (never enrolled, not in historial)
+    var esVisRep = esVisRep2;
+    var desde    = desde2;
     var avBg = esVisRep?'var(--teal-soft)':(pct<50?'var(--rojo-soft)':pct<75?'var(--naranja-soft)':'var(--verde-soft)');
     var avCl = esVisRep?'var(--teal)':(pct<50?'var(--rojo)':pct<75?'var(--naranja)':'var(--verde)');
     return '<tr style="'+(esVisRep?'border-left:3px solid var(--teal);background:#f0fdfa;':'')+'">'
