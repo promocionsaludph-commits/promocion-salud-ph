@@ -4325,12 +4325,34 @@ function renderReporteAsistencias() {
     if (faltas>maxFaltas) maxFaltas=faltas;
   });
 
+  // Only count sessions up to today for % calculation
+  var hoyStr = new Date().toISOString().slice(0,10);
+  var sesHastaHoy = sesActivas.filter(function(s){ return s.fecha <= hoyStr; });
+  var totalPresHoy = 0, totalPosHoy = 0, totalAusHoy = 0, totalJustHoy = 0;
+  parts.forEach(function(p){
+    var ua = asist[p.id]||{};
+    sesHastaHoy.forEach(function(s){
+      var v = ua[s.fecha]||'';
+      if (!estabaInscritoEnPeriodo(p, tid, s.fecha)) return;
+      if (v==='J') { totalJustHoy++; return; }
+      if (v==='P'||v==='A') {
+        totalPosHoy++;
+        if(v==='P') totalPresHoy++;
+        if(v==='A') totalAusHoy++;
+      }
+    });
+  });
+  var pctHastaHoy = totalPosHoy>0 ? Math.round(totalPresHoy/totalPosHoy*100) : 0;
+  var realizadas  = sesFilt.filter(function(s){ return !s.cancelada; }).length;
+  var promPorClase= sesHastaHoy.length>0 ? Math.round(totalPresHoy/sesHastaHoy.length) : 0;
+
   document.getElementById('rep-stats').innerHTML = [
-    {v:parts.length,       l:'Participantes',   c:'azul',    i:'👥'},
-    {v:sesFilt.length,     l:'Sesiones',        c:'teal',    i:'📅'},
-    {v:canceladas,         l:'Canceladas',      c:'naranja', i:'⚠️'},
-    {v:pctGlobal+'%',      l:'% Asistencia',    c:'verde',   i:'✅'},
-    {v:totalPres,          l:'Total presentes', c:'verde',   i:'🙋'},
+    {v:realizadas,          l:'Sesiones realizadas',   c:'azul',    i:'📅'},
+    {v:canceladas,          l:'Sesiones canceladas',   c:'naranja', i:'⚠️'},
+    {v:parts.length,        l:'Inscritos',             c:'teal',    i:'👥'},
+    {v:totalPres,           l:'Total asistencias',     c:'verde',   i:'🙋'},
+    {v:promPorClase,        l:'Promedio por clase',    c:'azul',    i:'📊'},
+    {v:pctHastaHoy+'%',     l:'% Hasta hoy',           c:'verde',   i:'✅'},
   ].map(function(s){
     return '<div class="stat-card"><div class="stat-icon '+s.c+'">'+s.i+'</div>'
       +'<div><div class="stat-val">'+s.v+'</div><div class="stat-lbl">'+s.l+'</div></div></div>';
@@ -4358,6 +4380,33 @@ function renderReporteAsistencias() {
           +'</th>';
       }).join('');
 
+  // ── Summary row: totals P/A/J per session ──
+  var summaryHtml = '<tr style="background:#f1f5f9;border-bottom:2px solid #cbd5e1;">'
+    + '<td style="font-weight:700;font-size:0.72rem;color:var(--gris-400);padding:10px 8px;position:sticky;left:0;background:#f1f5f9;z-index:2;">TOTAL POR SESIÓN</td>'
+    + '<td style="position:sticky;left:200px;background:#f1f5f9;z-index:2;"></td>'
+    + '<td style="position:sticky;left:310px;background:#f1f5f9;z-index:2;"></td>'
+    + '<td style="background:#d1fae5;"></td>'
+    + '<td style="background:#fee2e2;border-right:2px solid #cbd5e1;"></td>'
+    + sesFilt.map(function(s){
+        if (s.cancelada) return '<td style="text-align:center;background:#fef9c3;color:var(--naranja);font-weight:800;font-size:0.8rem;padding:6px 4px;">C</td>';
+        var sp=0, sa=0, sj=0;
+        parts.forEach(function(p){
+          var v = (asist[p.id]||{})[s.fecha]||'';
+          if (v==='P') sp++;
+          else if (v==='A') sa++;
+          else if (v==='J') sj++;
+        });
+        var esFut = s.fecha > new Date().toISOString().slice(0,10);
+        var bg = esFut ? 'background:#f0f9ff;' : '';
+        return '<td style="text-align:center;padding:6px 4px;'+bg+'">'
+          +(sp ? '<div style="color:var(--verde);font-weight:800;font-size:0.78rem;line-height:1.4;">P:'+sp+'</div>' : '')
+          +(sa ? '<div style="color:var(--rojo);font-weight:800;font-size:0.78rem;line-height:1.4;">A:'+sa+'</div>' : '')
+          +(sj ? '<div style="color:#7c3aed;font-weight:800;font-size:0.78rem;line-height:1.4;">J:'+sj+'</div>' : '')
+          +(!sp&&!sa&&!sj ? '<span style="color:var(--gris-300);">—</span>' : '')
+          +'</td>';
+      }).join('')
+    + '</tr>';
+
   // Sort parts by attendance % asc (worst first) to show who misses most
   var partsOrdered = parts.slice().sort(function(a,b){
     var pa = sesActivas.length>0 ? sesActivas.filter(function(s){ return (asist[a.id]||{})[s.fecha]==='P'; }).length/sesActivas.length : 0;
@@ -4365,7 +4414,7 @@ function renderReporteAsistencias() {
     return pa-pb; // worst attendance first
   });
 
-  document.getElementById('rep-tbody').innerHTML = partsOrdered.map(function(p){
+  var rowsHtml = partsOrdered.map(function(p){
     var ua         = asist[p.id] || {};
     // Determine visitor status FIRST (needed for % calc)
     var estaActivo2    = (p.talleres||[]).includes(tid);
@@ -4433,6 +4482,10 @@ function renderReporteAsistencias() {
       + celdas
       +'</tr>';
   }).join('');
+
+  // Write summary row + participant rows to table
+  var repTbodyEl = document.getElementById('rep-tbody');
+  if (repTbodyEl) repTbodyEl.innerHTML = summaryHtml + rowsHtml;
 }
 
 function exportarReporteCSV() {
