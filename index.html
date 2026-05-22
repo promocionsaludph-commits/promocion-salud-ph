@@ -1769,7 +1769,13 @@ function fbDel(col, id) {
 function fbGetAll(col) {
   if (!_fbOk) return Promise.resolve([]);
   return _db.collection(col).get()
-    .then(function(snap){ return snap.docs.map(function(d){ return d.data(); }); })
+    .then(function(snap){
+      return snap.docs.map(function(d){
+        var data = d.data();
+        data._docId = d.id; // preserve document ID
+        return data;
+      });
+    })
     .catch(function(){ return []; });
 }
 
@@ -1864,13 +1870,20 @@ function syncFromFB(cb) {
   });
   fbGetAll('sesiones').then(function(docs){
     var all = {};
-    docs.forEach(function(d){ if(d.list) all[d._tid||''] = d.list; });
+    docs.forEach(function(d){ if(d.list && d._docId) all[d._docId] = d.list; });
     if(Object.keys(all).length) lsSet(KEYS.sesiones, all);
+    console.log('[Sync] Sesiones:', Object.keys(all).length, 'talleres');
   });
   fbGetAll('asistencias').then(function(docs){
     var all = {};
-    docs.forEach(function(d){ all[d._tid||''] = d; });
+    docs.forEach(function(d){
+      if(d._docId) {
+        var copy = Object.assign({},d); delete copy._docId;
+        all[d._docId] = copy;
+      }
+    });
     if(Object.keys(all).length) lsSet(KEYS.asistencias, all);
+    console.log('[Sync] Asistencias:', Object.keys(all).length, 'talleres');
   });
   fbGetAll('equipo').then(function(docs){
     if(docs[0] && docs[0].list) lsSet(KEYS.equipo, docs[0].list);
