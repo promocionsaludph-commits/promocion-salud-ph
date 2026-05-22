@@ -1713,7 +1713,13 @@ function initFB() {
     _db = firebase.firestore();
     _fbOk = true;
     fbBadge('Firebase conectado','verde');
-    setTimeout(function(){ document.getElementById('fb-badge').style.display='none'; }, 5000);
+    setTimeout(function(){ document.getElementById('fb-badge').style.display='none'; }, 3000);
+    // Update login screen if still showing
+    var loginStatus = document.getElementById('login-status');
+    if (loginStatus) {
+      loginStatus.textContent = '🟢 Conectado';
+      loginStatus.style.color = '#22c55e';
+    }
   } catch(e) {
     fbBadge('Firebase error: '+e.message,'rojo');
     console.error('[FB]', e);
@@ -1793,24 +1799,53 @@ function getActividades()   { return ls(KEYS.actividades)   || []; }
 function getAsistAct(aid)   { return (ls(KEYS.asistAct)||{})[aid]  || {}; }
 function getSession()       { return ls(KEYS.session); }
 
-function saveEquipo(arr)     { lsSet(KEYS.equipo, arr);       fbSet('equipo','all',{list:arr}); }
-function saveParticipantes(arr){ lsSet(KEYS.participantes,arr); fbSet('participantes','all',{list:arr}); }
-function saveTalleres(arr)   { lsSet(KEYS.talleres, arr);     fbSet('talleres','all',{list:arr}); }
+function saveEquipo(arr){
+  lsSet(KEYS.equipo, arr);
+  if (_fbOk) { fbSet('equipo','all',{list:arr}); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('equipo','all',{list:arr});} },500); }
+}
+function saveParticipantes(arr){
+  lsSet(KEYS.participantes, arr);
+  if (_fbOk) { fbSet('participantes','all',{list:arr}); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('participantes','all',{list:arr});} },500); }
+}
+function saveTalleres(arr){
+  lsSet(KEYS.talleres, arr);
+  if (_fbOk) { fbSet('talleres','all',{list:arr}); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('talleres','all',{list:arr});} },500); }
+}
 function saveSesiones(tid,arr){
   var all = ls(KEYS.sesiones)||{};
   all[tid] = arr; lsSet(KEYS.sesiones, all);
-  fbSet('sesiones', tid, {list:arr});
+  if (_fbOk) {
+    fbSet('sesiones', tid, {list:arr});
+  } else {
+    // Retry when Firebase connects
+    var retry = setInterval(function(){
+      if (_fbOk) {
+        clearInterval(retry);
+        fbSet('sesiones', tid, {list:arr});
+        console.log('[FB] Sesiones guardadas tras reconexión');
+      }
+    }, 500);
+  }
 }
 function saveAsistencias(tid,obj){
   var all = ls(KEYS.asistencias)||{};
   all[tid] = obj; lsSet(KEYS.asistencias, all);
-  fbSet('asistencias', tid, obj);
+  if (_fbOk) { fbSet('asistencias', tid, obj); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('asistencias',tid,obj);} },500); }
 }
-function saveActividades(arr){ lsSet(KEYS.actividades, arr);  fbSet('actividades','all',{list:arr}); }
+function saveActividades(arr){
+  lsSet(KEYS.actividades, arr);
+  if (_fbOk) { fbSet('actividades','all',{list:arr}); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('actividades','all',{list:arr});} },500); }
+}
 function saveAsistAct(aid, obj){
   var all = ls(KEYS.asistAct)||{};
   all[aid] = obj; lsSet(KEYS.asistAct, all);
-  fbSet('asist_act', aid, obj);
+  if (_fbOk) { fbSet('asist_act', aid, obj); }
+  else { var r=setInterval(function(){ if(_fbOk){clearInterval(r);fbSet('asist_act',aid,obj);} },500); }
 }
 function saveSession(u) { lsSet(KEYS.session, u); }
 function clearSession() { localStorage.removeItem(KEYS.session); }
@@ -4986,21 +5021,13 @@ function fbActivarListeners() {
   _listeners.push(
     _db.collection('sesiones').onSnapshot(function(snap) {
       var all = JSON.parse(localStorage.getItem(KEYS.sesiones)||'{}');
-      var changed = false;
       snap.forEach(function(doc) {
-        var tid  = doc.id;
         var data = doc.data().list;
-        if (!data) return;
-        if (JSON.stringify(all[tid]) !== JSON.stringify(data)) {
-          all[tid] = data;
-          changed  = true;
-        }
+        if (data) all[doc.id] = data;
       });
-      if (changed) {
-        lsSet(KEYS.sesiones, all);
-        console.log('[RT] Sesiones actualizadas');
-        if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte']);
-      }
+      lsSet(KEYS.sesiones, all);
+      console.log('[RT] Sesiones actualizadas');
+      if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte']);
     }, function(e){ console.warn('[RT] sesiones:', e.message); })
   );
 
@@ -5008,22 +5035,40 @@ function fbActivarListeners() {
   _listeners.push(
     _db.collection('asistencias').onSnapshot(function(snap) {
       var all = JSON.parse(localStorage.getItem(KEYS.asistencias)||'{}');
-      var changed = false;
       snap.forEach(function(doc) {
-        var tid  = doc.id;
         var data = doc.data();
-        if (!data) return;
-        if (JSON.stringify(all[tid]) !== JSON.stringify(data)) {
-          all[tid] = data;
-          changed  = true;
-        }
+        if (data) all[doc.id] = data;
       });
-      if (changed) {
-        lsSet(KEYS.asistencias, all);
-        console.log('[RT] Asistencias actualizadas');
-        if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte','dashboard']);
-      }
+      lsSet(KEYS.asistencias, all);
+      console.log('[RT] Asistencias actualizadas');
+      if (_session) refreshCurrentPanel(['asistencia','estadisticas','asist_reporte','dashboard']);
     }, function(e){ console.warn('[RT] asistencias:', e.message); })
+  );
+
+  // ── Actividades ──
+  _listeners.push(
+    _db.collection('actividades').doc('all').onSnapshot(function(doc) {
+      if (!doc.exists) return;
+      var data = doc.data().list;
+      if (!data) return;
+      lsSet(KEYS.actividades, data);
+      console.log('[RT] Actividades:', data.length);
+      if (_session) refreshCurrentPanel(['actividades','estadisticas']);
+    }, function(e){ console.warn('[RT] actividades:', e.message); })
+  );
+
+  // ── Asistencia Actividades ──
+  _listeners.push(
+    _db.collection('asist_act').onSnapshot(function(snap) {
+      var all = JSON.parse(localStorage.getItem(KEYS.asistAct)||'{}');
+      snap.forEach(function(doc) {
+        var data = doc.data();
+        if (data) all[doc.id] = data;
+      });
+      lsSet(KEYS.asistAct, all);
+      console.log('[RT] Asist actividades actualizada');
+      if (_session) refreshCurrentPanel(['actividades','estadisticas']);
+    }, function(e){ console.warn('[RT] asist_act:', e.message); })
   );
 
   // ── Equipo ──
@@ -5371,7 +5416,7 @@ window.addEventListener('load', function() {
   }
 
   // Init Firebase
-  setTimeout(function(){ initFB(); }, 600);
+  setTimeout(function(){ initFB(); }, 100); // fast init
 
   // Check saved session
   var sess = getSession();
