@@ -1012,6 +1012,21 @@ select.form-input { cursor: pointer; }
 
       <!-- ESTADÍSTICAS -->
       <div id="panel-estadisticas" style="display:none;">
+
+        <!-- Selector Talleres / Actividades -->
+        <div style="display:flex;gap:0;margin-bottom:16px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 1px 4px rgba(0,0,0,0.08);width:fit-content;">
+          <button id="est-mode-talleres" onclick="setEstMode('talleres',this)"
+            style="padding:9px 28px;border-radius:8px;border:none;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;background:var(--azul-mid);color:#fff;transition:all .2s;">
+            🏋️ Talleres
+          </button>
+          <button id="est-mode-actividades" onclick="setEstMode('actividades',this)"
+            style="padding:9px 28px;border-radius:8px;border:none;font-family:Inter,sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;background:transparent;color:var(--gris-400);transition:all .2s;">
+            🎯 Actividades
+          </button>
+        </div>
+
+        <!-- Panel Talleres -->
+        <div id="est-panel-talleres">
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header"><div class="card-title">Filtros de análisis</div></div>
           <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:12px;">
@@ -1101,6 +1116,65 @@ select.form-input { cursor: pointer; }
           </div>
           <div class="chart-wrap" style="height:220px;"><canvas id="chart-est-evol"></canvas></div>
         </div>
+
+        </div><!-- end est-panel-talleres -->
+
+        <!-- Panel Actividades -->
+        <div id="est-panel-actividades" style="display:none;">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header"><div class="card-title">Filtrar actividades</div></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="min-width:260px;flex:2;">
+                <label class="form-label">Actividad</label>
+                <select class="form-input" id="est-act-sel" onchange="renderEstActividades()">
+                  <option value="">Todas las actividades</option>
+                </select>
+              </div>
+              <div class="form-group" style="min-width:200px;flex:1;">
+                <label class="form-label">Dependencia</label>
+                <select class="form-input" id="est-act-dep" onchange="renderEstActividades()">
+                  <option value="">Todas</option>
+                  <option value="Promoción de la Salud">Promoción de la Salud</option>
+                  <option value="Más Adultos Mayores Autovalentes">Más Adultos Mayores Autovalentes</option>
+                  <option value="Más Salud en Comunidad">Más Salud en Comunidad</option>
+                  <option value="Colaboración Intersector">Colaboración Intersector</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats actividades -->
+          <div class="stats-grid" id="est-act-stats" style="margin-bottom:16px;"></div>
+
+          <!-- Charts actividades -->
+          <div class="charts-2col" style="margin-bottom:16px;">
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">Asistencia por actividad</div><div class="card-sub">% de presentes</div></div></div>
+              <div class="chart-wrap"><canvas id="chart-act-asist"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div><div class="card-title">Asistencia por dependencia</div><div class="card-sub">% promedio por programa</div></div></div>
+              <div class="chart-wrap"><canvas id="chart-act-dep"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Detalle actividades -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">Detalle de asistentes</div></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>Actividad</th><th>Fecha</th><th>Dependencia</th>
+                  <th style="text-align:center;">Total</th>
+                  <th style="text-align:center;background:#d1fae5;">✅ Pres.</th>
+                  <th style="text-align:center;background:#fee2e2;">❌ Aus.</th>
+                  <th style="text-align:center;">% Asist.</th>
+                </tr></thead>
+                <tbody id="tbody-est-act"></tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- end est-panel-actividades -->
 
         <!-- Fila 4: Pueblos indígenas + Migrantes -->
         <div class="charts-2col" style="margin-bottom:16px;">
@@ -1291,6 +1365,20 @@ select.form-input { cursor: pointer; }
         <label class="form-label">Descripción</label>
         <input class="form-input" id="t-desc" placeholder="Breve descripción del taller"/>
       </div>
+      <div class="form-group">
+        <label class="form-label">Dependencia / Programa</label>
+        <select class="form-input" id="t-dependencia" onchange="toggleColabInput(this.value)">
+          <option value="">Sin especificar</option>
+          <option value="Promoción de la Salud">Promoción de la Salud</option>
+          <option value="Más Adultos Mayores Autovalentes">Más Adultos Mayores Autovalentes</option>
+          <option value="Más Salud en Comunidad">Más Salud en Comunidad</option>
+          <option value="Colaboración Intersector">Colaboración Intersector</option>
+        </select>
+      </div>
+      <div class="form-group" id="colab-wrap" style="display:none;">
+        <label class="form-label">En colaboración con</label>
+        <input class="form-input" id="t-colaboracion" placeholder="Ej: Departamento de Educación"/>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="cerrarModal('modal-taller')">Cancelar</button>
@@ -1322,6 +1410,20 @@ select.form-input { cursor: pointer; }
       <div class="form-group">
         <label class="form-label">Lugar</label>
         <input class="form-input" id="a-lugar" placeholder="Plazuela Central"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dependencia / Programa</label>
+        <select class="form-input" id="a-dependencia" onchange="toggleActColabInput(this.value)">
+          <option value="">Sin especificar</option>
+          <option value="Promoción de la Salud">Promoción de la Salud</option>
+          <option value="Más Adultos Mayores Autovalentes">Más Adultos Mayores Autovalentes</option>
+          <option value="Más Salud en Comunidad">Más Salud en Comunidad</option>
+          <option value="Colaboración Intersector">Colaboración Intersector</option>
+        </select>
+      </div>
+      <div class="form-group" id="act-colab-wrap" style="display:none;">
+        <label class="form-label">En colaboración con</label>
+        <input class="form-input" id="a-colaboracion" placeholder="Ej: DAEM, DIDECO..."/>
       </div>
       <div class="form-group">
         <label class="form-label">Tipo</label>
@@ -2049,43 +2151,72 @@ function renderDashboard() {
       +'</div>';
   }).join('');
 
-  // Chart: asistencia por taller
+  // Chart: asistencia por dependencia
   destroyChart('chart-dash-talleres');
   var ctx1 = document.getElementById('chart-dash-talleres');
-  if (ctx1 && talls.length) {
-    var tallLabels = talls.map(function(t){ return t.emoji+' '+t.nombre; });
-    var tallPcts   = talls.map(function(t){
-      var ses = getSesiones(t.id).filter(function(s){ return !s.suspendida; });
-      var asist = getAsistencias(t.id);
-      var pres=0, pos=0;
-      parts.forEach(function(p){
-        if(!(p.talleres||[]).includes(t.id)) return;
-        ses.forEach(function(s){ pos++; if((asist[p.id]||{})[s.fecha]==='P') pres++; });
+  if (ctx1) {
+    var DEPS = ['Promoción de la Salud','Más Adultos Mayores Autovalentes','Más Salud en Comunidad','Colaboración Intersector','Sin especificar'];
+    var DEP_COLORS = ['#2563eb','#059669','#d97706','#8b5cf6','#94a3b8'];
+
+    // Calculate % attendance per dependencia
+    var depData = DEPS.map(function(dep) {
+      var tallsDep = talls.filter(function(t){
+        return (t.dependencia||'Sin especificar') === dep;
       });
-      return pos>0 ? Math.round(pres/pos*100) : 0;
-    });
-    _dashCharts['chart-dash-talleres'] = new Chart(ctx1, {
-      type:'bar',
-      data:{ labels:tallLabels, datasets:[{data:tallPcts, backgroundColor:tallPcts.map(function(v){return v>=75?'#059669':v>=50?'#d97706':'#dc2626';}), borderRadius:6, borderWidth:0}] },
-      options:{ responsive:true, maintainAspectRatio:false, layout:{padding:{top:22}},
-        plugins:{legend:{display:false}},
-        scales:{ y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}}}, x:{grid:{display:false}} },
-        animation:{ onComplete:function(){
-          var ch=this, c2=ch.ctx;
-          ch.data.datasets.forEach(function(ds,i){
-            var meta=ch.getDatasetMeta(i);
-            meta.data.forEach(function(bar,idx){
-              var val=ds.data[idx]; if(!val&&val!==0) return;
-              var bH=bar.base-bar.y;
-              c2.save(); c2.textAlign='center'; c2.textBaseline='middle';
-              if(bH>28){c2.font='bold 14px Inter,sans-serif';c2.fillStyle='#fff';c2.fillText(val+'%',bar.x,bar.y+bH/2);}
-              else if(val>0){c2.font='bold 12px Inter,sans-serif';c2.fillStyle=ds.backgroundColor[idx];c2.fillText(val+'%',bar.x,bar.y-12);}
-              c2.restore();
+      if (!tallsDep.length) return null;
+      var totalP=0, totalPos=0;
+      tallsDep.forEach(function(t){
+        var ses   = getSesiones(t.id).filter(function(s){ return !s.suspendida && !s.cancelada; });
+        var asist = getAsistencias(t.id);
+        parts.forEach(function(p){
+          if (!(p.talleres||[]).includes(t.id)) return;
+          ses.forEach(function(s){ totalPos++; if((asist[p.id]||{})[s.fecha]==='P') totalP++; });
+        });
+      });
+      return { dep:dep, pct: totalPos>0?Math.round(totalP/totalPos*100):0, n:tallsDep.length };
+    }).filter(function(d){ return d !== null; });
+
+    if (depData.length) {
+      var depLabels = depData.map(function(d){ return d.dep+' ('+d.n+')'; });
+      var depPcts   = depData.map(function(d){ return d.pct; });
+      var depColors = depData.map(function(d){
+        return DEP_COLORS[DEPS.indexOf(d.dep)] || '#94a3b8';
+      });
+
+      _dashCharts['chart-dash-talleres'] = new Chart(ctx1, {
+        type: 'bar',
+        data: { labels: depLabels, datasets: [{
+          data: depPcts,
+          backgroundColor: depColors,
+          borderRadius: 8, borderWidth: 0, label: '% Asistencia'
+        }]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 24 } },
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: function(c){ return c.parsed.y+'% asistencia'; }}}
+          },
+          scales: {
+            y: { beginAtZero:true, max:100, ticks:{ callback:function(v){ return v+'%'; }}},
+            x: { grid: { display:false }, ticks: { font:{ size:11 }}}
+          },
+          animation: { onComplete: function() {
+            var ch=this, c2=ch.ctx;
+            ch.data.datasets.forEach(function(ds,i){
+              var meta=ch.getDatasetMeta(i);
+              meta.data.forEach(function(bar,idx){
+                var val=ds.data[idx]; if(!val&&val!==0) return;
+                var bH=bar.base-bar.y;
+                c2.save(); c2.textAlign='center'; c2.textBaseline='middle';
+                if(bH>28){c2.font='bold 14px Inter,sans-serif';c2.fillStyle='#fff';c2.fillText(val+'%',bar.x,bar.y+bH/2);}
+                else if(val>0){c2.font='bold 12px Inter,sans-serif';c2.fillStyle=depColors[idx]||'#333';c2.fillText(val+'%',bar.x,bar.y-12);}
+                c2.restore();
+              });
             });
-          });
-        }}
-      }
-    });
+          }}
+        }
+      });
+    }
   }
 
   // Chart: género
@@ -2376,6 +2507,10 @@ function abrirModalTaller(id) {
   var t = id ? getTalleres().find(function(x){ return x.id===id; }) : null;
   document.getElementById('modal-tall-titulo').textContent = id?'Editar taller':'Nuevo taller';
   setTimeout(function(){ initEmojiPicker(t?t.emoji:'🏋️'); }, 50);
+  var depEl = document.getElementById('t-dependencia');
+  if (depEl) { depEl.value = t?t.dependencia||'':''; toggleColabInput(depEl.value); }
+  var colEl = document.getElementById('t-colaboracion');
+  if (colEl) colEl.value = t?t.colaboracion||'':'';
   document.getElementById('t-nombre').value  = t?t.nombre:'';
   document.getElementById('t-horario').value = t?t.horario:'';
   document.getElementById('t-lugar').value   = t?t.lugar:'';
@@ -2384,15 +2519,25 @@ function abrirModalTaller(id) {
   setTimeout(function(){ document.getElementById('t-nombre').focus(); },200);
 }
 
+
+function toggleColabInput(val) {
+  var wrap = document.getElementById('colab-wrap');
+  if (wrap) wrap.style.display = val === 'Colaboración Intersector' ? '' : 'none';
+}
+
 function guardarTaller() {
   var nombre  = document.getElementById('t-nombre').value.trim();
   if (!nombre) { showToast('Ingresa el nombre del taller','rojo'); return; }
   var talls = getTalleres();
+  var depVal   = (document.getElementById('t-dependencia')||{}).value||'';
+  var colabVal = depVal==='Colaboración Intersector' ? ((document.getElementById('t-colaboracion')||{}).value||'').trim() : '';
   var obj = {
-    id:      _editTallId || uid(),
-    emoji:   document.getElementById('t-emoji').value.trim()||'🏋️',
+    id:          _editTallId || uid(),
+    emoji:       document.getElementById('t-emoji').value.trim()||'🏋️',
     nombre,
-    horario: document.getElementById('t-horario').value.trim(),
+    dependencia: depVal,
+    colaboracion:colabVal,
+    horario:     document.getElementById('t-horario').value.trim(),
     lugar:   document.getElementById('t-lugar').value.trim(),
     desc:    document.getElementById('t-desc').value.trim(),
     creadoEn:_editTallId?(talls.find(function(t){return t.id===_editTallId;})||{}).creadoEn:new Date().toLocaleString('es-CL'),
@@ -2539,30 +2684,162 @@ function asignarParticipante(pid) {
 // ═══════════════════════════════════════
 //  ACTIVIDADES
 // ═══════════════════════════════════════
+var _actActiva = null; // ID of activity with open attendance
+
 function renderActividades() {
   var acts  = getActividades();
-  var tbody = document.getElementById('tbody-actividades');
+  var parts = getParticipantes();
+  var cont  = document.getElementById('tbody-actividades');
   var empty = document.getElementById('act-empty');
-  if (!acts.length) { tbody.innerHTML=''; empty.style.display=''; return; }
+  if (!acts.length) { cont.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
-  tbody.innerHTML = acts.map(function(a){
-    var asist = getAsistAct(a.id);
-    var inscritos = Object.keys(asist).length;
-    var presentes = Object.values(asist).filter(function(v){ return v==='P'; }).length;
-    return '<tr>'
-      +'<td><b>'+escH(a.emoji||'🎯')+' '+escH(a.nombre)+'</b>'
-        +'<div style="font-size:0.75rem;color:var(--gris-400);">'+escH(a.tipo||'')+'</div></td>'
-      +'<td>'+fmtFecha(a.fecha)+'</td>'
-      +'<td>'+escH(a.lugar||'—')+'</td>'
-      +'<td><span class="badge badge-azul">'+inscritos+'</span></td>'
-      +'<td>'+asistBar(presentes,inscritos)+'</td>'
-      +'<td class="td-actions">'
-        +'<button class="btn btn-outline btn-sm" onclick="navGo(\'asistencia\');setTimeout(function(){asistSelAct(\''+a.id+'\')},300)">📋 Asistencia</button>'
-        +'<button class="btn btn-danger btn-sm btn-icon" onclick="eliminarActividad(\''+a.id+'\',\''+escH(a.nombre)+'\')">🗑️</button>'
+
+  // Sort by date desc
+  acts.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+
+  cont.innerHTML = acts.map(function(a){
+    var asist    = getAsistAct(a.id)||{};
+    var inscritos= Object.keys(asist).length;
+    var presentes= Object.values(asist).filter(function(v){ return v==='P'; }).length;
+    var dep      = a.dependencia ? '<span style="background:var(--azul-soft);color:var(--azul-mid);border-radius:20px;padding:1px 9px;font-size:0.7rem;font-weight:700;margin-left:6px;">'+escH(a.dependencia)+'</span>' : '';
+    var abierta  = _actActiva === a.id;
+
+    var asistPanel = '';
+    if (abierta) {
+      // Filter out _nombre metadata keys, only real person IDs
+      var pids = Object.keys(asist).filter(function(k){ return !k.endsWith('_nombre'); });
+      var allParts = pids.map(function(pid){
+        var p = parts.find(function(x){ return x.id===pid; });
+        if (p) return { id:p.id, nombre:p.nombre, est:asist[pid], tipo:'inscrito' };
+        // External person - name stored in _nombre key
+        var nombre = asist[pid+'_nombre'] || 'Sin nombre';
+        return { id:pid, nombre:nombre, est:asist[pid], tipo:'externo' };
+      });
+
+      var filas = allParts.length ? allParts.map(function(p){
+        var est  = p.est||'';
+        var bgP  = est==='P'?'var(--verde-soft)':'var(--gris-100)';
+        var bgA  = est==='A'?'var(--rojo-soft)':'var(--gris-100)';
+        var bgJ  = est==='J'?'#ede9fe':'var(--gris-100)';
+        var colP = est==='P'?'var(--verde)':'var(--gris-400)';
+        var colA = est==='A'?'var(--rojo)':'var(--gris-400)';
+        var colJ = est==='J'?'#7c3aed':'var(--gris-400)';
+        return '<tr style="'+(est==='P'?'background:#fafffe;':est==='A'?'background:#fffafa;':'')+'">'
+          +'<td><div>'
+            +(p.tipo==='externo'?'<span style="background:#f1f5f9;color:#64748b;border-radius:20px;padding:0 7px;font-size:0.65rem;font-weight:700;margin-right:4px;">Externo</span>':'')
+            +'<b>'+escH(p.nombre)+'</b>'
+          +'</div></td>'
+          +'<td style="text-align:center;"><div style="display:inline-flex;gap:5px;">'
+            +'<button class="btn-act-asist" data-aid="'+a.id+'" data-pid="'+p.id+'" data-val="P" style="width:40px;height:30px;border-radius:8px;border:2px solid '+(est==='P'?'var(--verde)':'var(--gris-200)')+';background:'+bgP+';font-weight:700;font-size:0.8rem;cursor:pointer;color:'+colP+';">'+(est==='P'?'✓ P':'P')+'</button>'
+            +'<button class="btn-act-asist" data-aid="'+a.id+'" data-pid="'+p.id+'" data-val="A" style="width:40px;height:30px;border-radius:8px;border:2px solid '+(est==='A'?'var(--rojo)':'var(--gris-200)')+';background:'+bgA+';font-weight:700;font-size:0.8rem;cursor:pointer;color:'+colA+';">'+(est==='A'?'✗ A':'A')+'</button>'
+            +'<button class="btn-act-asist" data-aid="'+a.id+'" data-pid="'+p.id+'" data-val="J" style="width:40px;height:30px;border-radius:8px;border:2px solid '+(est==='J'?'#7c3aed':'var(--gris-200)')+';background:'+bgJ+';font-weight:700;font-size:0.8rem;cursor:pointer;color:'+colJ+';" title="Justificado">'+(est==='J'?'✓ J':'J')+'</button>'
+            +'<button class="btn-act-del" data-aid="'+a.id+'" data-pid="'+p.id+'" style="width:30px;height:30px;border-radius:8px;border:none;background:var(--gris-100);color:var(--gris-400);font-size:0.8rem;cursor:pointer;" title="Quitar">✕</button>'
+          +'</div></td></tr>';
+      }).join('') : '<tr><td colspan="2" style="text-align:center;color:var(--gris-400);font-style:italic;padding:14px;">Sin asistentes registrados</td></tr>';
+
+      asistPanel = '<tr><td colspan="5" style="padding:0;background:var(--gris-50,#f8fafc);">'
+        +'<div style="padding:16px;border-top:2px solid var(--azul-soft);">'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'
+            +'<div style="font-weight:700;color:var(--azul);font-size:0.88rem;">📋 Lista de asistencia · '+fmtFecha(a.fecha)+'</div>'
+            +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+              +'<button class="btn-act-agregar btn btn-outline btn-sm" data-aid="'+a.id+'">+ Agregar persona</button>'
+              +'<button class="btn-act-todos btn btn-success btn-sm" data-aid="'+a.id+'">✅ Todos presentes</button>'
+            +'</div>'
+          +'</div>'
+          +'<table style="width:100%;border-collapse:collapse;">'
+            +'<thead><tr style="font-size:0.75rem;color:var(--gris-400);text-transform:uppercase;">'
+              +'<th style="padding:6px 8px;text-align:left;font-weight:600;">Participante</th>'
+              +'<th style="padding:6px 8px;text-align:center;font-weight:600;">P / A / J</th>'
+            +'</tr></thead>'
+            +'<tbody>'+filas+'</tbody>'
+          +'</table>'
+        +'</div>'
+      +'</td></tr>';
+    }
+
+    return '<tr class="btn-act-row" data-aid="'+a.id+'" style="cursor:pointer;'+(abierta?'background:var(--azul-soft);':'')+'">'
+      +'<td>'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+          +'<span style="font-size:1.3rem;">'+escH(a.emoji||'🎯')+'</span>'
+          +'<div>'
+            +'<b>'+escH(a.nombre)+'</b>'+dep
+            +(a.colaboracion?'<div style="font-size:0.72rem;color:var(--gris-400);">Con: '+escH(a.colaboracion)+'</div>':'')
+          +'</div>'
+        +'</div>'
       +'</td>'
-      +'</tr>';
+      +'<td>'+fmtFecha(a.fecha)+(a.hora?' · '+a.hora:'')+'</td>'
+      +'<td>'+escH(a.lugar||'—')+'</td>'
+      +'<td><span class="badge badge-azul">'+presentes+'/'+inscritos+'</span></td>'
+      +'<td>'+asistBar(presentes,inscritos)+'</td>'
+      +'<td class="td-actions" onclick="event.stopPropagation();">'
+        +'<button class="btn-act-elim btn btn-danger btn-sm btn-icon" data-aid="'+a.id+'" data-nombre="'+escH(a.nombre)+'">🗑️</button>'
+      +'</td>'
+      +'</tr>'
+      + asistPanel;
   }).join('');
 }
+
+function toggleActPanel(aid) {
+  _actActiva = _actActiva === aid ? null : aid;
+  renderActividades();
+}
+
+// Clean up old external entries that got stored as "P"/"A"/"J" with _nombre suffix as key
+function limpiarAsistAct(aid) {
+  var asist = getAsistAct(aid)||{};
+  var cleaned = {};
+  Object.keys(asist).forEach(function(k) {
+    if (!k.endsWith('_nombre')) cleaned[k] = asist[k];
+    else cleaned[k] = asist[k]; // keep _nombre metadata
+  });
+  return cleaned;
+}
+
+function actMarcarTodos(aid, val) {
+  var asist = getAsistAct(aid)||{};
+  Object.keys(asist).forEach(function(pid){
+    if (!pid.endsWith('_nombre')) asist[pid] = val;
+  });
+  saveAsistAct(aid, asist);
+  renderActividades();
+}
+
+// P/A/J and delete buttons event delegation for activities
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.btn-act-asist');
+  if (btn) {
+    e.stopPropagation();
+    var aid = btn.getAttribute('data-aid');
+    var pid = btn.getAttribute('data-pid');
+    var val = btn.getAttribute('data-val');
+    var asist = getAsistAct(aid)||{};
+    asist[pid] = asist[pid]===val ? '' : val;
+    saveAsistAct(aid, asist);
+    renderActividades();
+    return;
+  }
+  var row = e.target.closest('.btn-act-row');
+  if (row && !e.target.closest('.td-actions') && !e.target.closest('.btn-act-asist') && !e.target.closest('.btn-act-del')) {
+    toggleActPanel(row.getAttribute('data-aid')); return;
+  }
+  var agr = e.target.closest('.btn-act-agregar');
+  if (agr) { e.stopPropagation(); abrirModalAgregarActAsist(agr.getAttribute('data-aid')); return; }
+  var tod = e.target.closest('.btn-act-todos');
+  if (tod) { e.stopPropagation(); actMarcarTodos(tod.getAttribute('data-aid'),'P'); return; }
+  var elim = e.target.closest('.btn-act-elim');
+  if (elim) { e.stopPropagation(); eliminarActividad(elim.getAttribute('data-aid'), elim.getAttribute('data-nombre')); return; }
+  var del = e.target.closest('.btn-act-del');
+  if (del) {
+    e.stopPropagation();
+    var aid = del.getAttribute('data-aid');
+    var pid = del.getAttribute('data-pid');
+    var asist = getAsistAct(aid)||{};
+    delete asist[pid]; delete asist[pid+'_nombre'];
+    saveAsistAct(aid, asist);
+    renderActividades();
+    return;
+  }
+});
 
 function abrirModalActividad() {
   document.getElementById('a-nombre').value = '';
@@ -2573,6 +2850,11 @@ function abrirModalActividad() {
   setTimeout(function(){ document.getElementById('a-nombre').focus(); },200);
 }
 
+
+function toggleActColabInput(val) {
+  var wrap = document.getElementById('act-colab-wrap');
+  if (wrap) wrap.style.display = val === 'Colaboración Intersector' ? '' : 'none';
+}
 function guardarActividad() {
   var nombre = document.getElementById('a-nombre').value.trim();
   var fecha  = document.getElementById('a-fecha').value;
@@ -2580,11 +2862,15 @@ function guardarActividad() {
   var acts = getActividades();
   var emojis={'Actividad Física':'🏃','Alimentación':'🥗','Bienestar Mental':'🧠','Charla':'💬','Otro':'⭐'};
   var tipo = document.getElementById('a-tipo').value;
+  var depAct   = (document.getElementById('a-dependencia')||{}).value||'';
+  var colabAct = depAct==='Colaboración Intersector' ? ((document.getElementById('a-colaboracion')||{}).value||'').trim() : '';
   acts.push({
     id:uid(), nombre, fecha, tipo,
     hora:  document.getElementById('a-hora').value,
     lugar: document.getElementById('a-lugar').value.trim(),
     emoji: emojis[tipo]||'🎯',
+    dependencia:  depAct,
+    colaboracion: colabAct,
     creadoEn: new Date().toLocaleString('es-CL'),
   });
   saveActividades(acts);
@@ -4805,6 +5091,253 @@ function fbDesactivarListeners() {
   _listeners = [];
 }
 
+
+// ─── Actividades: helpers ───
+// Search results click delegation
+document.addEventListener('click', function(e) {
+  var item = e.target.closest('.act-search-item');
+  if (item) { agregarActAsistExistente(item.getAttribute('data-pid')); }
+});
+
+function saveAsistAct(aid, data) {
+  var all = ls(KEYS.asistAct)||{};
+  all[aid] = data;
+  lsSet(KEYS.asistAct, all);
+  fbSet('asist_act', aid, data);
+}
+
+function abrirModalAgregarActAsist(aid) {
+  var act = getActividades().find(function(a){ return a.id===aid; });
+  document.getElementById('act-asist-aid').value  = aid;
+  document.getElementById('act-asist-titulo').textContent = act?act.nombre:'';
+  document.getElementById('act-asist-buscar').value = '';
+  document.getElementById('act-asist-resultados').innerHTML = '';
+  document.getElementById('act-asist-nuevo-nombre').value = '';
+  abrirModal('modal-act-asist');
+}
+
+function buscarActAsist() {
+  var q     = (document.getElementById('act-asist-buscar').value||'').trim().toLowerCase();
+  var aid   = document.getElementById('act-asist-aid').value;
+  var asist = getAsistAct(aid)||{};
+  var parts = getParticipantes();
+  var res   = q.length>=2 ? parts.filter(function(p){
+    return p.nombre.toLowerCase().includes(q) && !asist[p.id];
+  }).slice(0,6) : [];
+  document.getElementById('act-asist-resultados').innerHTML = res.map(function(p){
+    var edad = calcEdad(p.fechaNac);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--gris-100);cursor:pointer;" onclick="agregarActAsistExistente(\''+p.id+'\')">'
+      +'<div><b style="font-size:0.88rem;">'+escH(p.nombre)+'</b>'
+        +(edad?'<span style="font-size:0.75rem;color:var(--gris-400);margin-left:6px;">'+edad+' años</span>':'')
+      +'</div>'
+      +'<span style="font-size:0.78rem;color:var(--azul-mid);font-weight:600;">+ Agregar</span>'
+      +'</div>';
+  }).join('') || (q.length>=2?'<div style="padding:10px 12px;color:var(--gris-400);font-size:0.82rem;">Sin resultados</div>':'');
+}
+
+function agregarActAsistExistente(pid) {
+  var aid   = document.getElementById('act-asist-aid').value;
+  var asist = getAsistAct(aid)||{};
+  if (!asist[pid]) asist[pid] = 'P';
+  saveAsistAct(aid, asist);
+  cerrarModal('modal-act-asist');
+  renderActividades();
+  showToast('Persona agregada y marcada Presente ✅','verde');
+}
+
+function agregarActAsistNuevo() {
+  var nombre = (document.getElementById('act-asist-nuevo-nombre').value||'').trim().toUpperCase();
+  if (!nombre) { showToast('Ingresa el nombre','rojo'); return; }
+  var aid    = document.getElementById('act-asist-aid').value;
+  var asist  = getAsistAct(aid)||{};
+  var pid    = uid();
+  asist[pid] = 'P';
+  asist[pid+'_nombre'] = nombre;
+  saveAsistAct(aid, asist);
+  cerrarModal('modal-act-asist');
+  renderActividades();
+  showToast(nombre+' agregado y marcado Presente ✅','verde');
+}
+
+
+// ═══════════════════════════════════════
+//  ESTADÍSTICAS — MODO TALLERES / ACTIVIDADES
+// ═══════════════════════════════════════
+var _estMode = 'talleres';
+var _actCharts = {};
+
+function destroyActChart(id) {
+  if (_actCharts[id]) { try{ _actCharts[id].destroy(); }catch(e){} delete _actCharts[id]; }
+}
+
+function setEstMode(mode, btn) {
+  _estMode = mode;
+  // Toggle button styles
+  ['talleres','actividades'].forEach(function(m) {
+    var b = document.getElementById('est-mode-'+m);
+    if (!b) return;
+    b.style.background = m===mode ? 'var(--azul-mid)' : 'transparent';
+    b.style.color = m===mode ? '#fff' : 'var(--gris-400)';
+  });
+  // Toggle panels
+  var pt = document.getElementById('est-panel-talleres');
+  var pa = document.getElementById('est-panel-actividades');
+  if (pt) pt.style.display = mode==='talleres' ? '' : 'none';
+  if (pa) pa.style.display = mode==='actividades' ? '' : 'none';
+  if (mode==='actividades') renderEstActividades();
+}
+
+function renderEstActividades() {
+  var acts  = getActividades();
+  var parts = getParticipantes();
+
+  // Populate activity selector
+  var selAct = document.getElementById('est-act-sel');
+  var selDep = document.getElementById('est-act-dep');
+  if (selAct) {
+    var prevA = selAct.value;
+    selAct.innerHTML = '<option value="">Todas las actividades</option>'
+      + acts.map(function(a){
+          return '<option value="'+a.id+'"'+(a.id===prevA?' selected':'')+'>'+escH(a.emoji+' '+a.nombre+' · '+fmtFecha(a.fecha))+'</option>';
+        }).join('');
+    if (prevA) selAct.value = prevA;
+  }
+
+  var filtAct = selAct ? selAct.value : '';
+  var filtDep = selDep ? selDep.value : '';
+
+  // Filter activities
+  var actsFilt = acts.filter(function(a){
+    if (filtAct && a.id !== filtAct) return false;
+    if (filtDep && (a.dependencia||'') !== filtDep) return false;
+    return true;
+  });
+
+  // Accumulate stats
+  var totalAsist=0, totalPres=0, totalAus=0, totalJust=0;
+  var depData={};
+
+  var detalle = actsFilt.map(function(a){
+    var asist = getAsistAct(a.id)||{};
+    var pids  = Object.keys(asist).filter(function(k){ return !k.endsWith('_nombre'); });
+    var pres  = pids.filter(function(k){ return asist[k]==='P'; }).length;
+    var aus   = pids.filter(function(k){ return asist[k]==='A'; }).length;
+    var just  = pids.filter(function(k){ return asist[k]==='J'; }).length;
+    var total = pids.filter(function(k){ return asist[k]!=='J'; }).length;
+    var pct   = total>0 ? Math.round(pres/total*100) : 0;
+
+    totalAsist += pids.length;
+    totalPres  += pres;
+    totalAus   += aus;
+    totalJust  += just;
+
+    var dep = a.dependencia||'Sin especificar';
+    if (!depData[dep]) depData[dep] = {pres:0, total:0};
+    depData[dep].pres  += pres;
+    depData[dep].total += total;
+
+    return { a:a, pres:pres, aus:aus, just:just, total:total, pct:pct };
+  });
+
+  var pctGlobal = (totalAsist-totalJust)>0 ? Math.round(totalPres/(totalAsist-totalJust)*100) : 0;
+
+  // Stat cards
+  document.getElementById('est-act-stats').innerHTML = [
+    {v:actsFilt.length,  l:'Actividades',       c:'azul',    i:'🎯'},
+    {v:totalAsist,       l:'Total asistentes',   c:'teal',    i:'👥'},
+    {v:totalPres,        l:'Presentes',          c:'verde',   i:'✅'},
+    {v:totalAus,         l:'Ausentes',           c:'rojo',    i:'❌'},
+    {v:pctGlobal+'%',   l:'% Asistencia global',c:'naranja', i:'📊'},
+  ].map(function(s){
+    return '<div class="stat-card"><div class="stat-icon '+s.c+'">'+s.i+'</div>'
+      +'<div><div class="stat-val">'+s.v+'</div><div class="stat-lbl">'+s.l+'</div></div></div>';
+  }).join('');
+
+  // Chart 1: Asistencia por actividad
+  destroyActChart('chart-act-asist');
+  var ctx1 = document.getElementById('chart-act-asist');
+  if (ctx1 && detalle.length) {
+    var labels = detalle.map(function(d){ return d.a.emoji+' '+d.a.nombre; });
+    var data   = detalle.map(function(d){ return d.pct; });
+    var colors = data.map(function(v){ return v>=75?'#059669':v>=50?'#d97706':'#dc2626'; });
+    _actCharts['chart-act-asist'] = new Chart(ctx1, {
+      type:'bar',
+      data:{ labels:labels, datasets:[{ data:data, backgroundColor:colors, borderRadius:8, borderWidth:0, label:'% Asistencia' }]},
+      options:{ responsive:true, maintainAspectRatio:false, layout:{padding:{top:22}},
+        plugins:{ legend:{display:false}, tooltip:{callbacks:{label:function(c){return c.parsed.y+'%';}}}},
+        scales:{ y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}}}, x:{grid:{display:false}} },
+        animation:{ onComplete:function(){
+          var ch=this,c2=ch.ctx;
+          ch.data.datasets.forEach(function(ds,i){
+            var meta=ch.getDatasetMeta(i);
+            meta.data.forEach(function(bar,idx){
+              var val=ds.data[idx]; if(!val&&val!==0) return;
+              var bH=bar.base-bar.y;
+              c2.save();c2.textAlign='center';c2.textBaseline='middle';
+              if(bH>28){c2.font='bold 14px Inter,sans-serif';c2.fillStyle='#fff';c2.fillText(val+'%',bar.x,bar.y+bH/2);}
+              else if(val>0){c2.font='bold 12px Inter,sans-serif';c2.fillStyle=colors[idx];c2.fillText(val+'%',bar.x,bar.y-12);}
+              c2.restore();
+            });
+          });
+        }}
+      }
+    });
+  }
+
+  // Chart 2: Por dependencia
+  destroyActChart('chart-act-dep');
+  var ctx2 = document.getElementById('chart-act-dep');
+  if (ctx2) {
+    var DEPS = ['Promoción de la Salud','Más Adultos Mayores Autovalentes','Más Salud en Comunidad','Colaboración Intersector','Sin especificar'];
+    var DEP_COLORS = ['#2563eb','#059669','#d97706','#8b5cf6','#94a3b8'];
+    var depKeys = Object.keys(depData).filter(function(k){ return depData[k].total>0; });
+    var depPcts = depKeys.map(function(k){ return depData[k].total>0?Math.round(depData[k].pres/depData[k].total*100):0; });
+    var depCols = depKeys.map(function(k){ return DEP_COLORS[DEPS.indexOf(k)]||'#94a3b8'; });
+    if (depKeys.length) {
+      _actCharts['chart-act-dep'] = new Chart(ctx2, {
+        type:'bar',
+        data:{ labels:depKeys, datasets:[{ data:depPcts, backgroundColor:depCols, borderRadius:8, borderWidth:0 }]},
+        options:{ responsive:true, maintainAspectRatio:false, layout:{padding:{top:22}},
+          plugins:{ legend:{display:false} },
+          scales:{ y:{beginAtZero:true,max:100,ticks:{callback:function(v){return v+'%';}}}, x:{grid:{display:false},ticks:{font:{size:10}}} },
+          animation:{ onComplete:function(){
+            var ch=this,c2=ch.ctx;
+            ch.data.datasets.forEach(function(ds,i){
+              var meta=ch.getDatasetMeta(i);
+              meta.data.forEach(function(bar,idx){
+                var val=ds.data[idx]; if(!val&&val!==0) return;
+                var bH=bar.base-bar.y;
+                c2.save();c2.textAlign='center';c2.textBaseline='middle';
+                if(bH>28){c2.font='bold 14px Inter,sans-serif';c2.fillStyle='#fff';c2.fillText(val+'%',bar.x,bar.y+bH/2);}
+                c2.restore();
+              });
+            });
+          }}
+        }
+      });
+    }
+  }
+
+  // Detail table
+  var tbody = document.getElementById('tbody-est-act');
+  if (tbody) {
+    tbody.innerHTML = detalle.map(function(d){
+      var pctCol = d.pct>=75?'var(--verde)':d.pct>=50?'var(--naranja)':'var(--rojo)';
+      var dep    = d.a.dependencia||'—';
+      var colab  = d.a.colaboracion ? ' · '+d.a.colaboracion : '';
+      return '<tr>'
+        +'<td><b>'+escH(d.a.emoji+' '+d.a.nombre)+'</b></td>'
+        +'<td style="white-space:nowrap;">'+fmtFecha(d.a.fecha)+(d.a.hora?' · '+d.a.hora:'')+'</td>'
+        +'<td style="font-size:0.8rem;">'+escH(dep+colab)+'</td>'
+        +'<td style="text-align:center;"><b>'+d.pres+d.aus+'</b></td>'
+        +'<td style="text-align:center;background:#f0fdf4;"><b style="color:var(--verde);">'+d.pres+'</b></td>'
+        +'<td style="text-align:center;background:#fef2f2;"><b style="color:var(--rojo);">'+d.aus+'</b></td>'
+        +'<td style="text-align:center;"><b style="color:'+pctCol+';">'+d.pct+'%</b></td>'
+        +'</tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--gris-400);padding:20px;">Sin actividades en el período</td></tr>';
+  }
+}
+
 window.addEventListener('load', function() {
   // Check mobile
   if (window.innerWidth < 768) {
@@ -5087,6 +5620,45 @@ function exportarAsistenciaCSV(periodo) {
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="cerrarModal('modal-quitar-taller')">Cancelar</button>
         <button class="btn btn-danger" onclick="confirmarQuitarTaller()">🗑️ Confirmar retiro</button>
+      </div>
+    </div>
+  </div>
+  <!-- Modal: Agregar persona a actividad -->
+  <div class="modal-overlay" id="modal-act-asist">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">+ Agregar persona</div>
+          <div class="modal-sub" id="act-asist-titulo"></div>
+        </div>
+        <button class="btn-modal-close" onclick="cerrarModal('modal-act-asist')">✕</button>
+      </div>
+      <input type="hidden" id="act-asist-aid"/>
+
+      <div style="margin-bottom:16px;">
+        <label class="form-label">Buscar participante existente</label>
+        <input class="form-input" id="act-asist-buscar" placeholder="Escribe para buscar..."
+          oninput="buscarActAsist()" onfocus="buscarActAsist()"/>
+        <div id="act-asist-resultados" style="border:1.5px solid var(--gris-200);border-top:none;
+          border-radius:0 0 10px 10px;max-height:200px;overflow-y:auto;"></div>
+      </div>
+
+      <div style="border-top:1.5px dashed var(--gris-200);padding-top:14px;">
+        <label class="form-label">O registrar persona externa</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="act-asist-nuevo-nombre" placeholder="NOMBRE COMPLETO"
+            oninput="toUpper(this)" style="text-transform:uppercase;flex:1;"/>
+          <button class="btn btn-primary btn-sm" onclick="agregarActAsistNuevo()" style="white-space:nowrap;">
+            + Agregar
+          </button>
+        </div>
+        <div style="font-size:0.73rem;color:var(--gris-400);margin-top:4px;">
+          Solo quedará registrado en esta actividad
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="cerrarModal('modal-act-asist')">Cerrar</button>
       </div>
     </div>
   </div>
